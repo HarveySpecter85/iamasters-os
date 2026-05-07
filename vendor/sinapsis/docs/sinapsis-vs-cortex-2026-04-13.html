@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinapsis v4.3.3 vs Cortex v3.11.1 — Honest Comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --copper: #C4956A;
+    --copper-light: #D4A87A;
+    --copper-dim: #8B6A4A;
+    --copper-glow: rgba(196, 149, 106, 0.15);
+    --copper-glow-strong: rgba(196, 149, 106, 0.25);
+    --bg: #050505;
+    --surface: #111111;
+    --surface-raised: #1A1A1A;
+    --surface-hover: #222222;
+    --border: #2A2A2A;
+    --border-copper: rgba(196, 149, 106, 0.3);
+    --text: #FAFAFA;
+    --text-dim: #999999;
+    --text-muted: #666666;
+    --sinapsis: #C4956A;
+    --cortex: #6A9EC4;
+    --cortex-glow: rgba(106, 158, 196, 0.15);
+    --green: #6AC47A;
+    --red: #C46A6A;
+    --yellow: #C4B86A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--copper-dim) var(--bg);
+  }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Sidebar Navigation */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    z-index: 100;
+    padding: 2rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--copper);
+    margin-bottom: 0.25rem;
+    letter-spacing: 0.02em;
+  }
+
+  .sidebar-sub {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar nav { flex: 1; }
+
+  .sidebar nav a {
+    display: block;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.15rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 400;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    border-left: 2px solid transparent;
+  }
+
+  .sidebar nav a:hover {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .sidebar nav a.active {
+    color: var(--copper);
+    background: var(--copper-glow);
+    border-left-color: var(--copper);
+    font-weight: 500;
+  }
+
+  .sidebar-footer {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+    line-height: 1.5;
+  }
+
+  .sidebar-toggle {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 150;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--copper);
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Main content */
+  .main {
+    margin-left: 260px;
+    min-height: 100vh;
+  }
+
+  /* Scroll reveal */
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Hero */
+  .hero {
+    position: relative;
+    padding: 6rem 3rem 4rem;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -20%;
+    width: 140%;
+    height: 200%;
+    background: radial-gradient(ellipse at 50% 0%, var(--copper-glow) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--copper);
+    background: var(--copper-glow);
+    border: 1px solid var(--border-copper);
+    padding: 0.35rem 1rem;
+    border-radius: 100px;
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+  }
+
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 0.75rem;
+    position: relative;
+  }
+
+  .hero h1 .vs {
+    display: inline-block;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem;
+    font-weight: 300;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    vertical-align: middle;
+    margin: 0 0.75rem;
+  }
+
+  .hero h1 .sinapsis-name { color: var(--sinapsis); }
+  .hero h1 .cortex-name { color: var(--cortex); }
+
+  .hero-date {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-desc {
+    font-size: 1rem;
+    color: var(--text-dim);
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  .hero-links {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .hero-links a {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+
+  .hero-links a:hover {
+    border-color: var(--copper);
+    color: var(--copper);
+  }
+
+  /* Section common */
+  section {
+    padding: 4rem 3rem;
+    border-top: 1px solid var(--border);
+  }
+
+  section h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+
+  section .section-sub {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 2.5rem;
+  }
+
+  /* At a Glance */
+  .glance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .glance-col h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .glance-col.sinapsis h3 { color: var(--sinapsis); border-bottom-color: var(--sinapsis); }
+  .glance-col.cortex h3 { color: var(--cortex); border-bottom-color: var(--cortex); }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover {
+    border-color: var(--border-copper);
+    background: var(--surface-raised);
+  }
+
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  .sinapsis .stat-value { color: var(--sinapsis); }
+  .cortex .stat-value { color: var(--cortex); }
+
+  /* Architecture */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+
+  .arch-col h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .arch-col.sinapsis h3 { color: var(--sinapsis); }
+  .arch-col.cortex h3 { color: var(--cortex); }
+
+  .pipeline {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+  }
+
+  .pipe-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    position: relative;
+  }
+
+  .pipe-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 2.2rem;
+    bottom: -0.2rem;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .pipe-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--bg);
+    position: relative;
+    z-index: 1;
+  }
+
+  .sinapsis .pipe-dot { background: var(--sinapsis); }
+  .cortex .pipe-dot { background: var(--cortex); }
+
+  .pipe-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .pipe-detail {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-top: 0.15rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Comparison Table */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+
+  thead th {
+    background: var(--surface);
+    padding: 0.9rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.72rem;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-dim);
+    position: sticky;
+    top: 0;
+  }
+
+  thead th:nth-child(2) { color: var(--sinapsis); }
+  thead th:nth-child(3) { color: var(--cortex); }
+
+  tbody td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:hover { background: var(--surface); }
+
+  .cat-row td {
+    background: var(--surface-raised);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--copper);
+    padding: 0.6rem 1rem;
+  }
+
+  td:first-child {
+    font-weight: 500;
+    color: var(--text);
+    min-width: 180px;
+  }
+
+  td:nth-child(2), td:nth-child(3) {
+    color: var(--text-dim);
+    min-width: 260px;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+  }
+
+  .badge-win {
+    display: inline-block;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 600;
+    vertical-align: middle;
+    margin-left: 0.35rem;
+  }
+
+  .badge-s { background: rgba(196,149,106,0.2); color: var(--sinapsis); }
+  .badge-c { background: rgba(106,158,196,0.2); color: var(--cortex); }
+  .badge-tie { background: rgba(196,196,106,0.15); color: var(--yellow); }
+
+  /* What Each Does Better */
+  .better-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+
+  .better-col h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .better-col.sinapsis h3 { color: var(--sinapsis); border-bottom-color: var(--sinapsis); }
+  .better-col.cortex h3 { color: var(--cortex); border-bottom-color: var(--cortex); }
+
+  .feat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.25s ease;
+  }
+
+  .feat-card:hover {
+    border-color: var(--border-copper);
+    transform: translateY(-1px);
+  }
+
+  .feat-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    margin-right: 0.5rem;
+    color: var(--bg);
+  }
+
+  .sinapsis .feat-num { background: var(--sinapsis); }
+  .cortex .feat-num { background: var(--cortex); }
+
+  .feat-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    display: inline;
+  }
+
+  .feat-desc {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 0.4rem;
+    line-height: 1.55;
+  }
+
+  /* Shared Equivalences */
+  .shared-section {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .shared-section h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    color: var(--yellow);
+    margin-bottom: 1.25rem;
+  }
+
+  .shared-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .shared-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    transition: all 0.2s ease;
+  }
+
+  .shared-card:hover { border-color: rgba(196, 196, 106, 0.3); }
+
+  .shared-card strong {
+    display: block;
+    color: var(--text);
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Ideas Section */
+  .ideas-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+
+  .ideas-col h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .ideas-col.for-sinapsis h3 { color: var(--sinapsis); border-bottom-color: var(--sinapsis); }
+  .ideas-col.for-cortex h3 { color: var(--cortex); border-bottom-color: var(--cortex); }
+
+  .idea-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s ease;
+  }
+
+  .idea-card:hover {
+    border-color: var(--border-copper);
+  }
+
+  .idea-from {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.4rem;
+  }
+
+  .for-sinapsis .idea-from { color: var(--cortex); }
+  .for-cortex .idea-from { color: var(--sinapsis); }
+
+  .idea-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.3rem;
+  }
+
+  .idea-desc {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem;
+    text-align: center;
+  }
+
+  .footer-credits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .footer-credit {
+    padding: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .footer-credit h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .footer-credit.sinapsis h4 { color: var(--sinapsis); }
+  .footer-credit.cortex h4 { color: var(--cortex); }
+
+  .footer-credit p {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .footer-credit a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    transition: color 0.2s;
+  }
+
+  .footer-credit a:hover { color: var(--copper); }
+
+  .footer-note {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    max-width: 540px;
+    margin: 1.5rem auto 0;
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  .footer-meta {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-toggle { display: flex; }
+    .main { margin-left: 0; }
+    section { padding: 3rem 1.5rem; }
+    .hero { padding: 5rem 1.5rem 3rem; }
+    .hero h1 { font-size: 2rem; }
+  }
+
+  @media (max-width: 768px) {
+    .glance-grid, .arch-grid, .better-grid, .ideas-grid, .footer-credits {
+      grid-template-columns: 1fr;
+    }
+    .shared-grid { grid-template-columns: 1fr 1fr; }
+    .hero h1 { font-size: 1.6rem; }
+    .hero h1 .vs { display: block; margin: 0.5rem 0; }
+    table { font-size: 0.75rem; }
+    td:nth-child(2), td:nth-child(3) { min-width: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Mobile toggle -->
+<button class="sidebar-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Toggle navigation">&#9776;</button>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">Comparison Report</div>
+  <div class="sidebar-sub">Sinapsis vs Cortex</div>
+  <nav>
+    <a href="#hero" class="active">Overview</a>
+    <a href="#glance">At a Glance</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#comparison">Feature Comparison</a>
+    <a href="#strengths">What Each Does Better</a>
+    <a href="#ideas">Improvement Ideas</a>
+    <a href="#footer">Credits</a>
+  </nav>
+  <div class="sidebar-footer">
+    Data sourced from FEATURES.md of both repositories. Report generated 2026-04-13. No affiliation between projects.
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Hero -->
+  <header class="hero" id="hero">
+    <div class="reveal">
+      <div class="hero-badge">Honest &amp; Balanced Comparison &mdash; April 2026</div>
+      <h1>
+        <span class="sinapsis-name">Sinapsis v4.3.3</span>
+        <span class="vs">vs</span>
+        <span class="cortex-name">Cortex v3.11.1</span>
+      </h1>
+      <p class="hero-date">Published 2026-04-13 &mdash; Data verified from each project's FEATURES.md</p>
+      <p class="hero-desc">
+        Two independent approaches to the same problem: teaching Claude Code to learn from its
+        operator over time. Both ship hooks, pattern detectors, dream cycles, and confidence
+        management &mdash; but make very different trade-off choices. This report presents
+        the facts without favoritism.
+      </p>
+      <div class="hero-links">
+        <a href="https://github.com/Luispitik/sinapsis" target="_blank" rel="noopener">Luispitik/sinapsis</a>
+        <a href="https://github.com/fermonterom/fs-cortex" target="_blank" rel="noopener">fermonterom/fs-cortex</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- At a Glance -->
+  <section id="glance">
+    <div class="reveal">
+      <h2>At a Glance</h2>
+      <p class="section-sub">Key numbers from each project, side by side.</p>
+    </div>
+    <div class="glance-grid">
+      <div class="glance-col sinapsis reveal">
+        <h3>Sinapsis v4.3.3</h3>
+        <div class="stat-card">
+          <span class="stat-label">Commands</span>
+          <span class="stat-value">15</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Hook files</span>
+          <span class="stat-value">7</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Core lines</span>
+          <span class="stat-value">1,614</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Tests</span>
+          <span class="stat-value">83</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Test suites</span>
+          <span class="stat-value">6</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Skills shipped</span>
+          <span class="stat-value">3</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Token budget</span>
+          <span class="stat-value mono">6,915/session</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Agents</span>
+          <span class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">License</span>
+          <span class="stat-value mono" style="font-size:0.8rem;">Source-avail.</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Scrubbing patterns</span>
+          <span class="stat-value">8</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Pattern detectors</span>
+          <span class="stat-value">5</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">CI platforms</span>
+          <span class="stat-value mono" style="font-size:0.75rem;">Ubuntu/macOS/Win</span>
+        </div>
+      </div>
+      <div class="glance-col cortex reveal">
+        <h3>Cortex v3.11.1</h3>
+        <div class="stat-card">
+          <span class="stat-label">Commands</span>
+          <span class="stat-value">17</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Hooks + Lib modules</span>
+          <span class="stat-value">4 + 5</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Core lines</span>
+          <span class="stat-value">&mdash;</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Tests</span>
+          <span class="stat-value">159</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Test suites</span>
+          <span class="stat-value">12</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Skills shipped</span>
+          <span class="stat-value">1</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Token budget</span>
+          <span class="stat-value mono">8,000/session</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Agents</span>
+          <span class="stat-value">3</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">License</span>
+          <span class="stat-value mono">MIT</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Scrubbing patterns</span>
+          <span class="stat-value">12</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Pattern detectors</span>
+          <span class="stat-value">5</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">CI platforms</span>
+          <span class="stat-value mono" style="font-size:0.75rem;">Ubuntu/macOS/Win</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section id="architecture">
+    <div class="reveal">
+      <h2>Architecture</h2>
+      <p class="section-sub">How each system processes observations into actionable knowledge.</p>
+    </div>
+    <div class="arch-grid">
+      <div class="arch-col sinapsis reveal">
+        <h3>Sinapsis Pipeline</h3>
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="pipe-dot">1</div>
+            <div>
+              <div class="pipe-label">observe_v3.py</div>
+              <div class="pipe-detail">PostToolUse hook &middot; 200 lines &middot; flags is_error</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">2</div>
+            <div>
+              <div class="pipe-label">_session-learner.sh</div>
+              <div class="pipe-detail">Stop hook &middot; 329 lines &middot; 5 pattern detectors</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">3</div>
+            <div>
+              <div class="pipe-label">_instinct-activator.sh</div>
+              <div class="pipe-detail">PreToolUse hook &middot; 221 lines &middot; occurrence tracking + auto-promote</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">4</div>
+            <div>
+              <div class="pipe-label">_passive-activator.sh</div>
+              <div class="pipe-detail">PreToolUse hook &middot; 66 lines &middot; rule engine (6 rules)</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">5</div>
+            <div>
+              <div class="pipe-label">_project-context.sh</div>
+              <div class="pipe-detail">PreToolUse hook &middot; 136 lines &middot; project state injection</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">6</div>
+            <div>
+              <div class="pipe-label">_dream.sh</div>
+              <div class="pipe-detail">Scheduled command &middot; 501 lines &middot; index hygiene + decay</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">7</div>
+            <div>
+              <div class="pipe-label">_eod-gather.sh</div>
+              <div class="pipe-detail">End-of-day summary &middot; 161 lines &middot; multi-project</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-col cortex reveal">
+        <h3>Cortex Pipeline</h3>
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="pipe-dot">1</div>
+            <div>
+              <div class="pipe-label">observe.py</div>
+              <div class="pipe-detail">PostToolUse hook &middot; observation capture</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">2</div>
+            <div>
+              <div class="pipe-label">session-learner.js</div>
+              <div class="pipe-detail">Stop hook &middot; 5 pattern detectors &middot; Node.js runtime</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">3</div>
+            <div>
+              <div class="pipe-label">injector.sh &rarr; injector-engine.js</div>
+              <div class="pipe-detail">PreToolUse hook &middot; token budget 8000 &middot; reflexes exempt</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">4</div>
+            <div>
+              <div class="pipe-label">session-start.py</div>
+              <div class="pipe-detail">Notification hook &middot; reset session token counter</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">5</div>
+            <div>
+              <div class="pipe-label">dream_cycle.py</div>
+              <div class="pipe-detail">Lib module &middot; confidence decay + hygiene + law distillation</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">6</div>
+            <div>
+              <div class="pipe-label">validate_instinct.py + yaml-utils.js</div>
+              <div class="pipe-detail">Lib modules &middot; YAML import validation + multiline safety</div>
+            </div>
+          </div>
+          <div class="pipe-step">
+            <div class="pipe-dot">7</div>
+            <div>
+              <div class="pipe-label">cortex_utils.py</div>
+              <div class="pipe-detail">Lib module &middot; shared utilities, HOME/CWD validation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Comparison Table -->
+  <section id="comparison">
+    <div class="reveal">
+      <h2>Feature Comparison</h2>
+      <p class="section-sub">Category-by-category breakdown. Badges indicate where one system has a measurable advantage.</p>
+    </div>
+    <div class="table-wrap reveal">
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Sinapsis v4.3.3</th>
+            <th>Cortex v3.11.1</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Knowledge Management -->
+          <tr class="cat-row"><td colspan="3">Knowledge Management</td></tr>
+          <tr>
+            <td>Confidence model</td>
+            <td>3 discrete levels: draft / confirmed / permanent. Simple, predictable.</td>
+            <td>Continuous 0.00&ndash;0.95. More granular ranking. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Auto-promote</td>
+            <td>5+ occurrences AND 3+ sessions &rarr; draft&rarr;confirmed</td>
+            <td>5+ activations AND 3+ sessions &rarr; 0.35. Same threshold logic.</td>
+          </tr>
+          <tr>
+            <td>Decay mechanism</td>
+            <td>Inline write at dream. confirmed 60d&rarr;draft, draft 90d&rarr;archived. Permanent exempt.</td>
+            <td>Read-only skip at injection (60d). Dream writes -0.05/30d linear. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Storage format</td>
+            <td>Single JSON index for all instincts. Compact. Fast reads.</td>
+            <td>Individual YAML per instinct. Git-friendly diffs. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Law distillation</td>
+            <td>Not implemented.</td>
+            <td>Instincts at 0.90+ auto-distill to TXT one-liners (max 10 laws). <span class="badge-win badge-c">unique</span></td>
+          </tr>
+          <tr>
+            <td>Cross-project promotion</td>
+            <td>Manual via /promote command.</td>
+            <td>Automatic: Jaccard &ge; 0.70 + 2 projects + avg conf &ge; 0.60 &rarr; global. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Operator State</td>
+            <td>Strategic decisions JSON. Cross-project memory with retired tech tracking. <span class="badge-win badge-s">unique</span></td>
+            <td>Not implemented.</td>
+          </tr>
+          <tr>
+            <td>Knowledge timeline</td>
+            <td>Not implemented.</td>
+            <td>Append-only knowledge-log.md with 11 event types. <span class="badge-win badge-c">unique</span></td>
+          </tr>
+          <tr>
+            <td>Token budget</td>
+            <td>1,500 chars/tool-use (per injection). 6,915 tok/session across 3 skills. <span class="badge-win badge-s">edge</span></td>
+            <td>8,000 tok/session total budget. Reflexes exempt from budget. Higher ceiling.</td>
+          </tr>
+
+          <!-- Security -->
+          <tr class="cat-row"><td colspan="3">Security</td></tr>
+          <tr>
+            <td>Secret scrubbing</td>
+            <td>8 patterns: API keys, JWT, PEM, GitHub, AWS, Stripe, Slack, SendGrid</td>
+            <td>12 patterns: adds SSH, connection strings, Google, Anthropic, OpenAI. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Prompt injection</td>
+            <td>10 blocked keywords + 500 char cap on instinct content.</td>
+            <td>10 blocked keywords in both Python and JS runtimes. <span class="badge-win badge-tie">tie</span></td>
+          </tr>
+          <tr>
+            <td>Path traversal</td>
+            <td>Explicit path traversal protection. <span class="badge-win badge-tie">tie</span></td>
+            <td>HOME + CWD validation. Per-user temp dirs.</td>
+          </tr>
+          <tr>
+            <td>Import safety</td>
+            <td>Not documented as explicit feature.</td>
+            <td>YAML multiline instinct import validation. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>ReDoS protection</td>
+            <td>Explicit ReDoS-safe regex patterns. <span class="badge-win badge-s">edge</span></td>
+            <td>Not documented as explicit feature.</td>
+          </tr>
+          <tr>
+            <td>Process isolation</td>
+            <td>execFileSync (no shell). Atomic writes. Dream lock. <span class="badge-win badge-s">edge</span></td>
+            <td>Hook payload via temp file. Per-user temp dirs. CORTEX-MANAGED markers.</td>
+          </tr>
+          <tr>
+            <td>Uninstall safety</td>
+            <td>Not documented.</td>
+            <td>Uninstall safety guard to prevent accidental removal. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+
+          <!-- Pattern Detection -->
+          <tr class="cat-row"><td colspan="3">Pattern Detection</td></tr>
+          <tr>
+            <td>Error-fix</td>
+            <td>Detects error &rarr; resolution pairs. <span class="badge-win badge-tie">tie</span></td>
+            <td>Detects error &rarr; resolution pairs.</td>
+          </tr>
+          <tr>
+            <td>Corrections</td>
+            <td>User-correction detection.</td>
+            <td>3+ edits in overlapping code regions. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Workflow chains</td>
+            <td>Trigram-based chain detection.</td>
+            <td>Trigram-based, 3+ occurrences to fire. <span class="badge-win badge-tie">tie</span></td>
+          </tr>
+          <tr>
+            <td>Repetitions</td>
+            <td>3+ sessions threshold.</td>
+            <td>5+ same tool+input threshold. Stricter. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Agent patterns</td>
+            <td>Agent pattern detection in session-learner.</td>
+            <td>Jaccard 0.40 similarity + agent evolution tracking. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+
+          <!-- Testing & CI -->
+          <tr class="cat-row"><td colspan="3">Testing &amp; CI</td></tr>
+          <tr>
+            <td>Test count</td>
+            <td>83 tests across 6 suites.</td>
+            <td>159 tests across 12 suites. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Lint integration</td>
+            <td>Pre-push hook.</td>
+            <td>ShellCheck + flake8 lint in CI. Dedicated lint job. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>CI matrix</td>
+            <td>Ubuntu + macOS + Windows. fail-fast: false. <span class="badge-win badge-tie">tie</span></td>
+            <td>2&times;2&times;2 matrix: OS &times; Python &times; Node. Badge job.</td>
+          </tr>
+          <tr>
+            <td>PowerShell tests</td>
+            <td>Windows CI via bash. No native PowerShell.</td>
+            <td>1 dedicated PowerShell test suite. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+
+          <!-- Portability -->
+          <tr class="cat-row"><td colspan="3">Portability</td></tr>
+          <tr>
+            <td>Backup</td>
+            <td>/backup command with cloud-agnostic targets. <span class="badge-win badge-s">edge</span></td>
+            <td>cx-backup to .tar.gz.</td>
+          </tr>
+          <tr>
+            <td>Restore</td>
+            <td>/restore from any backup location (OneDrive, GDrive, Dropbox, iCloud, USB). <span class="badge-win badge-s">edge</span></td>
+            <td>cx-restore from .tar.gz archive.</td>
+          </tr>
+          <tr>
+            <td>Cleanup</td>
+            <td>/cleanup command for removing stale data. <span class="badge-win badge-s">unique</span></td>
+            <td>Not shipped as dedicated command.</td>
+          </tr>
+          <tr>
+            <td>Export</td>
+            <td>Not a dedicated command.</td>
+            <td>cx-export for external sharing. <span class="badge-win badge-c">unique</span></td>
+          </tr>
+
+          <!-- Installer -->
+          <tr class="cat-row"><td colspan="3">Installer &amp; UX</td></tr>
+          <tr>
+            <td>Installer</td>
+            <td>bash + bat. Legacy cleanup on upgrade. <span class="badge-win badge-tie">tie</span></td>
+            <td>bash + PowerShell. Uninstaller with safety guard.</td>
+          </tr>
+          <tr>
+            <td>Interactive shorthand</td>
+            <td>Not implemented.</td>
+            <td>A=Accept, X=Reject, S=Skip, M=Merge, O=Omit, I=Install. <span class="badge-win badge-c">unique</span></td>
+          </tr>
+          <tr>
+            <td>Skill routing</td>
+            <td>Dedicated skill-router (4,150 tok) for on-demand skill loading. <span class="badge-win badge-s">unique</span></td>
+            <td>cx-router as a command (not a skill). Simpler routing.</td>
+          </tr>
+          <tr>
+            <td>Passive rules</td>
+            <td>Separate engine, 6 rules. Independent from instincts. <span class="badge-win badge-s">edge</span></td>
+            <td>10 reflexes (deterministic rules). Similar concept, more rules.</td>
+          </tr>
+          <tr>
+            <td>Multi-agent</td>
+            <td>Not shipped (v5.0-alpha designed only).</td>
+            <td>3 agents: cortex-observer (Opus 1M), cortex-reviewer (Sonnet &times;3), cortex-planner (Sonnet). <span class="badge-win badge-c">unique</span></td>
+          </tr>
+          <tr>
+            <td>Validation command</td>
+            <td>Not shipped.</td>
+            <td>cx-validate for instinct integrity checks. <span class="badge-win badge-c">unique</span></td>
+          </tr>
+          <tr>
+            <td>Retrospective</td>
+            <td>Not shipped (available as library skill outside core).</td>
+            <td>cx-retro for session retrospectives. <span class="badge-win badge-c">edge</span></td>
+          </tr>
+          <tr>
+            <td>Gotcha tracking</td>
+            <td>Not shipped.</td>
+            <td>cx-gotcha for capturing recurring pitfalls. <span class="badge-win badge-c">unique</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- What Each Does Better -->
+  <section id="strengths">
+    <div class="reveal">
+      <h2>What Each Does Better</h2>
+      <p class="section-sub">Genuine advantages, not marketing. Each project makes trade-offs the other doesn't.</p>
+    </div>
+    <div class="better-grid">
+      <div class="better-col sinapsis reveal">
+        <h3>Sinapsis Advantages</h3>
+
+        <div class="feat-card">
+          <span class="feat-num">1</span>
+          <span class="feat-title">Operator State</span>
+          <div class="feat-desc">A strategic decisions JSON that persists cross-project memory: retired tech warnings, project blueprints, cross-project lessons. Cortex has no equivalent for operator-level strategic context.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">2</span>
+          <span class="feat-title">Skill Router + Multi-Skill Architecture</span>
+          <div class="feat-desc">3 skills with on-demand loading from a dormant library. The router matches intent to skill tags and installs per-project. Cortex ships a single monolithic skill.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">3</span>
+          <span class="feat-title">Cloud-Agnostic Portability</span>
+          <div class="feat-desc">Backup/restore targets OneDrive, Google Drive, Dropbox, iCloud, and USB natively. Plus a dedicated /cleanup command. Cortex only backs up to local .tar.gz.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">4</span>
+          <span class="feat-title">Lower Token Overhead</span>
+          <div class="feat-desc">6,915 tokens/session vs 8,000. The per-injection cap of 1,500 chars prevents any single activation from consuming too much context. Every token saved is a token for the user's actual work.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">5</span>
+          <span class="feat-title">Passive Rules Separation</span>
+          <div class="feat-desc">Passive rules (business logic, brand context, tariffs) are kept in a separate engine from learned instincts. This prevents mixing deterministic rules with probabilistic knowledge.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">6</span>
+          <span class="feat-title">Explicit Security Hardening</span>
+          <div class="feat-desc">ReDoS-safe regex, execFileSync (no shell), atomic writes, dream lock, and token budget per injection. Documented and tested security surface.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">7</span>
+          <span class="feat-title">FEATURES.md Reference</span>
+          <div class="feat-desc">Ships a comprehensive feature reference doc alongside code, making the project self-documenting for comparison and audit purposes.</div>
+        </div>
+      </div>
+
+      <div class="better-col cortex reveal">
+        <h3>Cortex Advantages</h3>
+
+        <div class="feat-card">
+          <span class="feat-num">1</span>
+          <span class="feat-title">Multi-Agent Architecture</span>
+          <div class="feat-desc">3 specialized agents: cortex-observer (Opus 1M for deep analysis), cortex-reviewer (Sonnet x3 for parallel review), cortex-planner (Sonnet for planning). Sinapsis has no agents shipped.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">2</span>
+          <span class="feat-title">Test Coverage Depth</span>
+          <div class="feat-desc">159 tests in 12 suites (nearly 2x Sinapsis), with dedicated ShellCheck + flake8 lint in CI, a PowerShell suite, and a badge generation job. More rigorous validation pipeline.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">3</span>
+          <span class="feat-title">Continuous Confidence + Law Distillation</span>
+          <div class="feat-desc">0.00-0.95 continuous scale gives finer-grained ranking than 3 discrete levels. Instincts at 0.90+ auto-distill into max 10 concise one-liner laws. Elegant knowledge compression.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">4</span>
+          <span class="feat-title">Automatic Cross-Project Promotion</span>
+          <div class="feat-desc">Jaccard similarity >= 0.70 across 2+ projects with avg confidence >= 0.60 triggers automatic promotion to global scope. Sinapsis requires manual /promote.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">5</span>
+          <span class="feat-title">Knowledge Timeline</span>
+          <div class="feat-desc">Append-only knowledge-log.md with 11 event types provides a complete audit trail of how knowledge evolved over time. Full traceability.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">6</span>
+          <span class="feat-title">Broader Secret Scrubbing</span>
+          <div class="feat-desc">12 patterns vs 8. Covers SSH keys, database connection strings, Google tokens, Anthropic keys, and OpenAI keys that Sinapsis does not scrub.</div>
+        </div>
+
+        <div class="feat-card">
+          <span class="feat-num">7</span>
+          <span class="feat-title">Interactive Shorthand + Gotcha Tracking</span>
+          <div class="feat-desc">A/X/S/M/O/I keyboard shortcuts for fast triage. cx-gotcha captures recurring pitfalls as first-class entities. Both reduce operator friction.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared Equivalences -->
+    <div class="shared-section reveal">
+      <h3>Shared Equivalences</h3>
+      <div class="shared-grid">
+        <div class="shared-card">
+          <strong>Observe &rarr; Learn &rarr; Inject</strong>
+          Both use the same 3-phase pipeline
+        </div>
+        <div class="shared-card">
+          <strong>Dream Cycle</strong>
+          Both run periodic index hygiene + confidence decay
+        </div>
+        <div class="shared-card">
+          <strong>5 Pattern Detectors</strong>
+          Same five categories detected by both systems
+        </div>
+        <div class="shared-card">
+          <strong>Auto-Promote Threshold</strong>
+          Both: 5+ activations AND 3+ sessions
+        </div>
+        <div class="shared-card">
+          <strong>Tri-OS CI</strong>
+          Both test on Ubuntu, macOS, and Windows
+        </div>
+        <div class="shared-card">
+          <strong>Backup &amp; Restore</strong>
+          Both ship dedicated backup and restore commands
+        </div>
+        <div class="shared-card">
+          <strong>Prompt Injection Block</strong>
+          Both block 10 keywords for injection prevention
+        </div>
+        <div class="shared-card">
+          <strong>End-of-Day Summary</strong>
+          Both ship /eod or cx-eod for daily wrap-up
+        </div>
+        <div class="shared-card">
+          <strong>Deterministic Rules</strong>
+          Passive rules (6) vs Reflexes (10) &mdash; same concept
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Improvement Ideas -->
+  <section id="ideas">
+    <div class="reveal">
+      <h2>Improvement Ideas</h2>
+      <p class="section-sub">5 ideas for each project, inspired by what the other does well.</p>
+    </div>
+    <div class="ideas-grid">
+      <div class="ideas-col for-sinapsis reveal">
+        <h3>For Sinapsis (from Cortex)</h3>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Cortex</div>
+          <div class="idea-title">1. Continuous confidence scale</div>
+          <div class="idea-desc">Replace 3 discrete levels with a 0.00-1.00 continuous score. Enables finer-grained injection priority and more nuanced decay curves. Keep the simplicity of named thresholds as aliases (draft=0.10, confirmed=0.35, permanent=0.80).</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Cortex</div>
+          <div class="idea-title">2. Law distillation</div>
+          <div class="idea-desc">Auto-distill high-confidence instincts (confirmed 90d+) into concise one-liner laws. Cap at 10 laws for zero-cost injection. Would reduce token overhead further while preserving the most battle-tested knowledge.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Cortex</div>
+          <div class="idea-title">3. Knowledge timeline</div>
+          <div class="idea-desc">Add an append-only event log tracking instinct lifecycle events (created, promoted, decayed, archived, merged). Enables audit trails and retrospective analysis without parsing JSON diffs.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Cortex</div>
+          <div class="idea-title">4. Automatic cross-project promotion</div>
+          <div class="idea-desc">Detect when the same instinct appears across 2+ projects with sufficient confidence and auto-promote to global scope. Replace the current manual /promote with a deterministic Jaccard-based system.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Cortex</div>
+          <div class="idea-title">5. Broader secret scrubbing</div>
+          <div class="idea-desc">Add SSH key, database connection string, Google token, Anthropic key, and OpenAI key patterns to reach 12+ scrubbing rules. Low-effort, high-impact security improvement.</div>
+        </div>
+      </div>
+
+      <div class="ideas-col for-cortex reveal">
+        <h3>For Cortex (from Sinapsis)</h3>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Sinapsis</div>
+          <div class="idea-title">1. Operator State</div>
+          <div class="idea-desc">Add a strategic decisions layer that persists across all projects: retired tech warnings, stack decisions, project blueprints, cross-project lessons. Prevents repeating strategic conversations every session.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Sinapsis</div>
+          <div class="idea-title">2. Multi-skill architecture with router</div>
+          <div class="idea-desc">Split the single cortex skill into domain-specific skills with an intent-matching router. Enables per-project skill installation and reduces token overhead for projects that only need a subset of capabilities.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Sinapsis</div>
+          <div class="idea-title">3. Cloud-agnostic backup targets</div>
+          <div class="idea-desc">Extend cx-backup beyond .tar.gz to support direct backup to cloud storage providers (OneDrive, Google Drive, Dropbox, iCloud). Reduces friction for non-technical operators who don't work with archives.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Sinapsis</div>
+          <div class="idea-title">4. Per-injection token cap</div>
+          <div class="idea-desc">Add a per-tool-use character limit (e.g. 1,500 chars) alongside the session budget. Prevents any single instinct activation from consuming a disproportionate share of the 8,000 token session budget.</div>
+        </div>
+
+        <div class="idea-card">
+          <div class="idea-from">Inspired by Sinapsis</div>
+          <div class="idea-title">5. Dedicated cleanup command</div>
+          <div class="idea-desc">Ship a cx-cleanup that removes stale observations, orphaned temp files, and expired knowledge artifacts. Complements cx-backup with proactive hygiene rather than just archival.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer id="footer">
+    <div class="reveal">
+      <div class="footer-credits">
+        <div class="footer-credit sinapsis">
+          <h4>Sinapsis v4.3.3</h4>
+          <p>Luis Salgado / SalgadoIA</p>
+          <a href="https://github.com/Luispitik/sinapsis" target="_blank" rel="noopener">github.com/Luispitik/sinapsis</a>
+        </div>
+        <div class="footer-credit cortex">
+          <h4>Cortex v3.11.1</h4>
+          <p>Fernando Montero / Fersora Solutions</p>
+          <a href="https://github.com/fermonterom/fs-cortex" target="_blank" rel="noopener">github.com/fermonterom/fs-cortex</a>
+        </div>
+      </div>
+      <p class="footer-note">
+        These two projects evolved independently but tackle the same fundamental challenge:
+        teaching Claude Code to remember what matters. Both have contributed ideas that
+        made the other better. Competition in open ecosystems is a net positive.
+      </p>
+      <p class="footer-meta">
+        Report generated 2026-04-13 &middot; Data from FEATURES.md of both repos &middot; SalgadoIA copper dark theme
+      </p>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// Scroll reveal
+const revealEls = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+revealEls.forEach(el => observer.observe(el));
+
+// Sidebar active state
+const sections = document.querySelectorAll('section, header, footer');
+const navLinks = document.querySelectorAll('.sidebar nav a');
+
+const navObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { threshold: 0.2, rootMargin: '-80px 0px -60% 0px' });
+
+sections.forEach(s => { if (s.id) navObserver.observe(s); });
+
+// Close sidebar on mobile when clicking a link
+navLinks.forEach(link => {
+  link.addEventListener('click', () => {
+    if (window.innerWidth <= 1024) {
+      document.querySelector('.sidebar').classList.remove('open');
+    }
+  });
+});
+</script>
+
+</body>
+</html>

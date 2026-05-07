@@ -1,0 +1,75 @@
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code locales
+.claude/settings.local.json
+.claude/.local/
+
+# Operator data — privado por usuario, no se commitea
+context/daily-memory/
+context/user.md
+brand-context/voice/voice-profile.md
+brand-context/voice/samples.md
+brand-context/positioning/positioning.md
+brand-context/icp/icp.md
+brand-context/assets/
+
+# Project outputs — son del usuario, no del repo
+projects/briefs/*
+projects/*/
+!projects/.gitkeep
+!projects/briefs/.gitkeep
+
+# Client data — sensible
+clients/*
+!clients/_templates
+!clients/_templates/**
+
+# GSD planning folders (per-project, no del repo)
+.planning/
+**/.planning/
+
+# Logs
+*.log
+logs/
+
+# Backups
+.backup/
+*.bak
+_backup_*
+
+# Tests output
+tests/output/
+tests/.cache/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Node
+node_modules/
+package-lock.json
+yarn.lock
+
+# Synapsis temporary files (si alguna vez se genera dentro del repo)
+*.tmp
+*.lock

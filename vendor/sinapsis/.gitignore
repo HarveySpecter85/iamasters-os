@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+_dream.lock
+_dream.log
+_sinapsis-debug.log
+_session-learner.log
+_instinct.log
+_reflection.log
+_reflection-log.jsonl
+*.tmp
+*.swp
+_backup_*
+__pycache__/

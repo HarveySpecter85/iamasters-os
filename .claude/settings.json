@@ -1,0 +1,59 @@
+{
+  "_comment": "iAmasters OS — settings.json del proyecto. Permisos seguros + hooks locales del OS. Los hooks de Sinapsis viven en ~/.claude/settings.json (global), instalados por bash scripts/install.sh.",
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git pull)",
+      "Bash(git push)",
+      "Bash(npm install)",
+      "Bash(npm run *)",
+      "Bash(node *)",
+      "Bash(python3 *)",
+      "Bash(bash scripts/*)",
+      "Bash(ls *)",
+      "Bash(pwd)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Read(.env)",
+      "Read(**/.env)",
+      "Read(**/credentials*)",
+      "Read(**/secrets*)"
+    ]
+  },
+  "hooks": {
+    "_comment": "Hooks locales del OS — los hooks Sinapsis (observe, instinct-activator, etc.) están en ~/.claude/settings.json. Estos son específicos del repo.",
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "_comment": "Detecta si se ha añadido/modificado una skill — flagear para sync en próximo wrap-up",
+            "type": "command",
+            "command": "bash scripts/skill-change-detector.sh",
+            "async": true,
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

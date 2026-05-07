@@ -1,0 +1,40 @@
+{
+  "version": "4.3.1",
+  "system": "sinapsis",
+  "lastUpdated": "2026-04-08",
+  "globalSkills": [
+    {
+      "id": "skill-router",
+      "name": "Skill Router",
+      "description": "Orquesta skills: launcher, picker, catalogo, instalacion por proyecto",
+      "type": "global",
+      "status": "active",
+      "tokens_estimate": 4150,
+      "chars": 16596,
+      "measured": "2026-04-08"
+    },
+    {
+      "id": "sinapsis-learning",
+      "name": "Sinapsis Learning",
+      "description": "Aprendizaje continuo: observa patrones, captura instincts, lifecycle",
+      "type": "global",
+      "status": "active",
+      "tokens_estimate": 1250,
+      "chars": 4973,
+      "measured": "2026-04-08"
+    },
+    {
+      "id": "sinapsis-instincts",
+      "name": "Sinapsis Instincts",
+      "description": "Base de conocimiento con reglas aprendidas de proyectos anteriores",
+      "type": "global",
+      "status": "active",
+      "tokens_estimate": 1515,
+      "chars": 6058,
+      "measured": "2026-04-08"
+    }
+  ],
+  "librarySkills": [],
+  "totalTokensGlobal": 6915,
+  "note": "Token estimates measured 2026-04-08 using chars/4 approximation. Library skills se anaden automaticamente al instalar desde _library/"
+}

@@ -1,0 +1,447 @@
+#!/bin/bash
+# Session Learner - Sinapsis v4.3.3
+# Stop hook: five detectors —
+#   1. error-fix pairs (error → same tool success within 5 events)
+#   2. user-corrections (same file edited 2+ times within 10 events)
+#   3. workflow-chains (tool trigram repeated 2+ times)
+#   4. repetitions (same error pattern across 3+ sessions — cross-session memory)
+#   5. agent-patterns (subagent tool sequences captured from Agent tool calls)
+# Also writes context.md per project.
+# NO LLM. Pure deterministic Node.js.
+
+HOMUNCULUS="$HOME/.claude/homunculus"
+
+if [ "${SINAPSIS_DEBUG:-}" = "1" ]; then
+  exec 2>>"$HOME/.claude/skills/_sinapsis-debug.log"
+fi
+
+INDEX_FILE="$HOME/.claude/skills/_instincts-index.json"
+PROPOSALS_FILE="$HOME/.claude/skills/_instinct-proposals.json"
+LOG_FILE="$HOME/.claude/skills/_session-learner.log"
+
+# Find the most recently MODIFIED observations file (fix #17: was selecting by hash, not recency)
+OBS_FILE=""
+if [ -d "$HOMUNCULUS/projects" ]; then
+  # Portable: use stat instead of GNU find -printf (works on macOS + Linux + Git Bash)
+  OBS_FILE=$(find "$HOMUNCULUS/projects" -name "observations.jsonl" -newer "$HOMUNCULUS/.last-learn" 2>/dev/null | while read -r f; do echo "$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null || echo 0) $f"; done | sort -rn | head -1 | cut -d' ' -f2-)
+  [ -z "$OBS_FILE" ] && OBS_FILE=$(find "$HOMUNCULUS/projects" -name "observations.jsonl" -size +0c 2>/dev/null | while read -r f; do echo "$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null || echo 0) $f"; done | sort -rn | head -1 | cut -d' ' -f2-)
+fi
+
+[ -z "$OBS_FILE" ] && exit 0
+[ ! -s "$OBS_FILE" ] && exit 0
+
+node -e '
+const fs = require("fs");
+const path = require("path");
+
+const obsFile = process.argv[1];
+const indexFile = process.argv[2];
+const proposalsFile = process.argv[3];
+const logFile = process.argv[4];
+
+// Read last 5000 lines of observations (v4.5: was 1000; Opus 4.7 1M context absorbs the
+// extra payload without pressure and lets cross-session detectors see a longer window).
+let lines;
+try {
+  const content = fs.readFileSync(obsFile, "utf8").trim().split("\n");
+  lines = content.slice(-5000).map(l => { try { return JSON.parse(l); } catch(e) { return null; } }).filter(Boolean);
+} catch(e) { process.exit(0); }
+
+if (lines.length < 3) process.exit(0);
+
+// ── JOB 1: Write project context.md (ALWAYS — not just when proposals exist) ──
+const projectDir = path.dirname(obsFile);
+const projectHash = path.basename(projectDir);
+const today = new Date().toISOString().slice(0, 10);
+
+// Get project name + root + remote (hoisted — used by JOB 1, JOB 1.5 upsert and JOB 2)
+// Primary source: observations (observe.sh writes project_name and cwd into each entry)
+let projectName = projectHash;
+let projectRoot = "";
+let projectRemote = "";
+const { execFileSync } = require("child_process");
+// On Windows under Git Bash, cwd may arrive as "/c/Users/..." which native
+// git.exe rejects. Convert to "C:/Users/..." form which works on both POSIX and Windows.
+function normalizeCwd(p) {
+  if (!p) return p;
+  const m = p.match(/^\/([a-zA-Z])\/(.*)$/);
+  return m ? m[1].toUpperCase() + ":/" + m[2] : p;
+}
+try {
+  // Prefer most recent observation (cwd may have moved over time)
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!projectName || projectName === projectHash) {
+      if (lines[i].project_name) projectName = lines[i].project_name;
+    }
+    if (!projectRoot && lines[i].cwd) {
+      const cwd = normalizeCwd(lines[i].cwd);
+      try {
+        const root = execFileSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"],
+          { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8", timeout: 2000 }).trim();
+        if (root) {
+          projectRoot = root;
+          try {
+            projectRemote = execFileSync("git", ["-C", root, "remote", "get-url", "origin"],
+              { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8", timeout: 2000 }).trim();
+          } catch(e) {}
+        }
+      } catch(e) {}
+    }
+    if (projectName !== projectHash && projectRoot) break;
+  }
+} catch(e) {}
+// Legacy fallback: homunculus/projects.json (kept for back-compat with installs that created it)
+try {
+  const pj = JSON.parse(fs.readFileSync(process.env.HOME + "/.claude/homunculus/projects.json", "utf8"));
+  if (pj[projectHash]) {
+    if (pj[projectHash].name && projectName === projectHash) projectName = pj[projectHash].name;
+    if (pj[projectHash].root && !projectRoot) projectRoot = pj[projectHash].root;
+    if (pj[projectHash].remote && !projectRemote) projectRemote = pj[projectHash].remote;
+  }
+} catch(e) {}
+
+try {
+  // Get total obs count from full file
+  let totalObs = lines.length;
+  try {
+    totalObs = fs.readFileSync(obsFile, "utf8").trim().split("\n").length;
+  } catch(e) {}
+
+  // Files touched this session (Edit/Write, deduplicated, max 6)
+  const filesTouched = [...new Set(
+    lines
+      .filter(l => l.event === "tool_complete" && (l.tool === "Edit" || l.tool === "Write"))
+      .map(l => {
+        try {
+          const inp = JSON.parse(l.input || "{}");
+          return inp.file_path ? path.basename(inp.file_path) : null;
+        } catch(e) { return null; }
+      })
+      .filter(Boolean)
+  )].slice(0, 6);
+
+  // Error patterns count (for proposals hint)
+  let errorCount = 0;
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (!lines[i].is_error) continue;
+    for (let j = i+1; j < Math.min(i+6, lines.length); j++) {
+      if (lines[j].tool === lines[i].tool && !lines[j].is_error) {
+        errorCount++;
+        break;
+      }
+    }
+  }
+
+  const contextLines = [
+    "## Proyecto: " + projectName,
+    "Última sesión: " + today,
+    "Observaciones totales: " + totalObs,
+    filesTouched.length > 0
+      ? "Archivos activos: " + filesTouched.join(", ")
+      : null,
+    errorCount > 0
+      ? "Posibles gotchas detectados: " + errorCount + " — ejecuta /analyze-session"
+      : null,
+  ].filter(Boolean).join("\n");
+
+  fs.writeFileSync(projectDir + "/context.md", contextLines);
+} catch(e) {
+  // context.md write failure is non-critical
+}
+
+// ── JOB 1.5: Upsert canonical project registry _projects.json ──
+// FIX: prior to this, _projects.json was never populated by any hook even though
+// /projects, /eod, /instinct-status, /evolve, /backup all read from it.
+// We upsert here on every Stop event — atomic write + advisory lock, idempotent.
+try {
+  const registryPath = process.env.HOME + "/.claude/skills/_projects.json";
+  const lockPath = registryPath + ".lock";
+  const now = new Date().toISOString();
+
+  // Advisory lock to prevent lost updates when multiple Stop hooks fire concurrently
+  // from different sessions. tmp+rename alone prevents torn writes but NOT lost updates.
+  // Strategy: O_EXCL create on .lock, retry with backoff, skip if still locked.
+  const STALE_LOCK_MS = 10000;
+  let lockFd = null;
+  for (let attempt = 0; attempt < 8 && lockFd === null; attempt++) {
+    try {
+      lockFd = fs.openSync(lockPath, "wx");
+    } catch(e) {
+      if (e.code !== "EEXIST") throw e;
+      // Lock exists — check if stale (orphaned by crashed process)
+      try {
+        const stat = fs.statSync(lockPath);
+        if (Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
+          fs.unlinkSync(lockPath);
+          continue;
+        }
+      } catch(_) {}
+      // Backoff: 50ms, 100ms, 150ms, ...
+      const sleepMs = 50 * (attempt + 1);
+      const waitUntil = Date.now() + sleepMs;
+      while (Date.now() < waitUntil) { /* spin (no sleep primitive in stdlib) */ }
+    }
+  }
+  if (lockFd === null) {
+    // Could not acquire lock — skip this upsert. Next Stop will retry.
+    if (process.env.SINAPSIS_DEBUG === "1") {
+      process.stderr.write("[session-learner] _projects.json: lock contention, skipping upsert\n");
+    }
+  } else {
+    try {
+      // Read registry AFTER acquiring lock (prevents lost updates: another writer
+      // may have added entries between our earlier code and now).
+      let registry;
+      try {
+        registry = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      } catch(e) {
+        registry = { version: "4.1", system: "sinapsis", projects: [], note: "Projects registered automatically by _session-learner.sh on Stop events." };
+      }
+      if (!Array.isArray(registry.projects)) registry.projects = [];
+
+      let entry = registry.projects.find(p => p && p.id === projectHash);
+      if (!entry) {
+        entry = { id: projectHash, name: projectName, root: projectRoot, remote: projectRemote, created: now, last_seen: now };
+        registry.projects.push(entry);
+      } else {
+        if (projectName && projectName !== projectHash) entry.name = projectName;
+        if (projectRoot) entry.root = projectRoot;
+        if (projectRemote) entry.remote = projectRemote;
+        entry.last_seen = now;
+      }
+
+      // Atomic write: tmp + rename (still needed for crash safety)
+      const tmpPath = registryPath + ".tmp." + process.pid;
+      fs.writeFileSync(tmpPath, JSON.stringify(registry, null, 2));
+      fs.renameSync(tmpPath, registryPath);
+    } finally {
+      try { fs.closeSync(lockFd); } catch(_) {}
+      try { fs.unlinkSync(lockPath); } catch(_) {}
+    }
+  }
+} catch(e) {
+  // Registry upsert failure is non-critical (logged for debugging)
+  if (process.env.SINAPSIS_DEBUG === "1") {
+    process.stderr.write("[session-learner] _projects.json upsert failed: " + e.message + "\n");
+  }
+}
+
+// ── JOB 2: Detect error-resolution patterns → proposals ──
+
+// Read existing instincts to avoid re-proposing known patterns
+let existing = new Set();
+try {
+  const idx = JSON.parse(fs.readFileSync(indexFile, "utf8"));
+  (idx.instincts || []).forEach(i => existing.add(i.id));
+} catch(e) {}
+
+// Load proposals for today (session-based, overwrites on new day)
+let proposals;
+try {
+  const raw = JSON.parse(fs.readFileSync(proposalsFile, "utf8"));
+  proposals = (raw.session_date === today) ? raw : { version: "1.0", session_date: today, proposals: [] };
+} catch(e) {
+  proposals = { version: "1.0", session_date: today, proposals: [] };
+}
+
+// IDs already proposed today
+const proposedIds = new Set(proposals.proposals.map(p => p.id));
+const found = [];
+
+// PATTERN 1: error → same tool success within 5 events (uses is_error flag from observe_v3)
+// Dedup: one proposal per tool per day
+for (let i = 0; i < lines.length - 1; i++) {
+  if (!lines[i].is_error) continue;
+
+  const toolId = "fix-" + lines[i].tool.toLowerCase().replace(/[^a-z]/g, "");
+  if (existing.has(toolId) || proposedIds.has(toolId)) continue;
+
+  for (let j = i+1; j < Math.min(i+6, lines.length); j++) {
+    if (lines[j].tool === lines[i].tool && !lines[j].is_error) {
+      found.push({
+        type: "error_resolution",
+        id: toolId,
+        description: lines[i].tool + " error resuelto — posible gotcha a documentar",
+        evidence: "Sesion " + today + ": fallo y recuperacion en misma herramienta",
+        project_name: projectName,
+        sample_input: (lines[i].input || "").slice(0, 200),
+        sample_output: (lines[i].output || "").slice(0, 200),
+        err_msg: (lines[i].err_msg || "").slice(0, 200),
+        is_critical: !!lines[i].is_critical
+      });
+      proposedIds.add(toolId);
+      break;
+    }
+  }
+}
+
+// PATTERN 2: user corrections — Edit/Write on same file within 10 events = refinement
+// v4.2: detects when user iterates on same file (correction/preference signal)
+const editEvents = lines
+  .map((l, idx) => ({ ...l, _idx: idx }))
+  .filter(l => l.event === "tool_complete" && (l.tool === "Edit" || l.tool === "Write"));
+
+const correctedFiles = {};
+for (let i = 0; i < editEvents.length - 1; i++) {
+  let fileA = "";
+  try { const inp = JSON.parse(editEvents[i].input || "{}"); fileA = inp.file_path || ""; } catch(e) {}
+  if (!fileA) continue;
+
+  for (let j = i + 1; j < editEvents.length; j++) {
+    if (editEvents[j]._idx - editEvents[i]._idx > 10) break; // window of 10 events
+    let fileB = "";
+    try { const inp = JSON.parse(editEvents[j].input || "{}"); fileB = inp.file_path || ""; } catch(e) {}
+    if (fileA === fileB) {
+      const slug = path.basename(fileA).toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").slice(0, 30);
+      correctedFiles[slug] = (correctedFiles[slug] || 0) + 1;
+      break;
+    }
+  }
+}
+
+for (const [slug, count] of Object.entries(correctedFiles)) {
+  if (count < 2) continue; // need at least 2 correction cycles
+  const corrId = "correction-" + slug;
+  if (existing.has(corrId) || proposedIds.has(corrId)) continue;
+  found.push({
+    type: "user_correction",
+    id: corrId,
+    description: "Archivo " + slug + " editado " + (count + 1) + "+ veces — posible patron de correccion",
+    evidence: "Sesion " + today + ": " + count + " ciclos de re-edicion en mismo archivo",
+    project_name: projectName,
+    sample_input: "",
+    sample_output: ""
+  });
+  proposedIds.add(corrId);
+}
+
+// PATTERN 3: workflow chains — same sequence of 3+ tools appears 2+ times
+// v4.2: detects repeated tool sequences (workflow signal)
+const toolSeq = lines
+  .filter(l => l.event === "tool_complete")
+  .map(l => l.tool);
+
+if (toolSeq.length >= 6) {
+  const trigramCounts = {};
+  for (let i = 0; i <= toolSeq.length - 3; i++) {
+    const key = toolSeq[i] + ">" + toolSeq[i+1] + ">" + toolSeq[i+2];
+    trigramCounts[key] = (trigramCounts[key] || 0) + 1;
+  }
+
+  for (const [seq, count] of Object.entries(trigramCounts)) {
+    if (count < 2) continue;
+    const parts = seq.split(">");
+    const wfId = "workflow-" + parts.map(p => p.toLowerCase().replace(/[^a-z]/g, "")).join("-");
+    if (existing.has(wfId) || proposedIds.has(wfId)) continue;
+    found.push({
+      type: "workflow_chain",
+      id: wfId,
+      description: parts.join(" → ") + " repetido " + count + "x — posible workflow a documentar",
+      evidence: "Sesion " + today + ": secuencia de 3 tools repetida " + count + " veces",
+      project_name: projectName,
+      sample_input: "",
+      sample_output: ""
+    });
+    proposedIds.add(wfId);
+  }
+}
+
+// PATTERN 4: repetitions — same error tool seen in proposals from 3+ different days
+// v4.3.3: cross-session memory. Reads prior proposals to find recurring error patterns.
+// Cortex tracks this via "repetitions (>3 sessions)" — we use proposal history.
+try {
+  const rawProposals = JSON.parse(fs.readFileSync(proposalsFile, "utf8"));
+  const priorPropDates = {};
+  for (const p of (rawProposals.proposals || [])) {
+    if (p.type === "error_resolution" && p.proposed_at) {
+      const day = p.proposed_at.slice(0, 10);
+      if (!priorPropDates[p.id]) priorPropDates[p.id] = new Set();
+      priorPropDates[p.id].add(day);
+    }
+  }
+  // Also count today errors
+  for (const f of found) {
+    if (f.type === "error_resolution") {
+      if (!priorPropDates[f.id]) priorPropDates[f.id] = new Set();
+      priorPropDates[f.id].add(today);
+    }
+  }
+  for (const [errId, days] of Object.entries(priorPropDates)) {
+    if (days.size < 3) continue; // need 3+ distinct days
+    const repId = "repetition-" + errId;
+    if (existing.has(repId) || proposedIds.has(repId)) continue;
+    found.push({
+      type: "repetition",
+      id: repId,
+      description: errId + " repetido en " + days.size + " sesiones distintas — patron recurrente confirmado",
+      evidence: "Detectado en fechas: " + [...days].sort().join(", "),
+      project_name: projectName,
+      sample_input: "",
+      sample_output: ""
+    });
+    proposedIds.add(repId);
+  }
+} catch(e) { /* no prior proposals = skip */ }
+
+// PATTERN 5: agent patterns — captures tool sequences within Agent tool calls
+// v4.3.3: subagent behaviors are valuable learning data (Cortex agent-patterns)
+const agentEvents = lines.filter(l =>
+  l.tool === "Agent" && l.event === "tool_complete" && l.output
+);
+for (const ae of agentEvents) {
+  // Extract subagent type and result patterns from output
+  const output = (ae.output || "").slice(0, 1000);
+  // \u0027 is single-quote: avoids closing the bash single-quoted node -e block
+  const agentTypeMatch = output.match(/subagent_type[=:]?\s*["\u0027]?(\w+)/i);
+  const agentType = agentTypeMatch ? agentTypeMatch[1] : "general";
+  // If agent output contains error keywords, propose a pattern
+  const hasError = /\berror\b|\bfailed\b|\bexception\b/i.test(output);
+  if (hasError) {
+    const agId = "agent-error-" + agentType.toLowerCase();
+    if (existing.has(agId) || proposedIds.has(agId)) continue;
+    found.push({
+      type: "agent_pattern",
+      id: agId,
+      description: "Subagente " + agentType + " reporto errores — posible gotcha a documentar",
+      evidence: "Sesion " + today + ": Agent tool con errores en output",
+      project_name: projectName,
+      sample_input: (ae.input || "").slice(0, 200),
+      sample_output: output.slice(0, 200)
+    });
+    proposedIds.add(agId);
+  }
+}
+
+const now = new Date().toISOString();
+
+// Write proposals (only if new ones found)
+if (found.length > 0) {
+  found.forEach(f => {
+    proposals.proposals.push({ ...f, proposed_at: now, status: "pending", level: "draft" });
+  });
+  try { fs.writeFileSync(proposalsFile, JSON.stringify(proposals, null, 2)); } catch(e) {}
+}
+
+// Touch marker
+try {
+  fs.writeFileSync(process.env.HOME + "/.claude/homunculus/.last-learn", now);
+} catch(e) {}
+
+// Log
+try {
+  const summary = found.length > 0
+    ? found.length + " patterns: " + found.map(f => f.id).join(",")
+    : "no patterns";
+  fs.appendFileSync(logFile, now + " | " + summary + " | context.md written for " + projectHash + "\n");
+} catch(e) {}
+
+// Output systemMessage only if proposals found
+if (found.length > 0) {
+  const msg = "Sinapsis: " + found.length + " patron(es) detectado(s):\n" +
+    found.map(f => "  - " + f.description).join("\n") +
+    "\nRevisa con /analyze-session.";
+  console.log(JSON.stringify({ systemMessage: msg }));
+}
+' "$OBS_FILE" "$INDEX_FILE" "$PROPOSALS_FILE" "$LOG_FILE" 2>/dev/null
+
+exit 0
