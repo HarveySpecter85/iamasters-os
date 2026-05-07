@@ -9,9 +9,81 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Próximas versiones (en backlog)
-- v0.5.0: skills `marketing-ugc-script`, `marketing-email-sequence`, `operations-meeting-notes`, `operations-task-priority`, `strategy-trending-research`, `tool-youtube-transcript`, `viz-excalidraw-diagram`
+- v0.5.0: sprint con feedback de Luis sobre v0.4.3 + skills extra basadas en uso real
 - v0.6.0: dashboard del OS (pendiente decidir si se integra con dashboard Sinapsis)
-- v1.0.0: release pública estable
+- v1.0.0: release pública estable + vídeos Loom integrados + landing en iamastersacademy.com/os
+
+---
+
+## v0.4.3 — Plug-and-play conversacional (2026-05-08)
+
+> **Visión**: convertir la instalación de iAmasters OS en una experiencia conversacional. El miembro pega una URL en Claude Code y el sistema sabe qué hacer. Cero terminal manual, primer entregable garantizado en ~15-20 min.
+
+### Added — Skills nuevas
+
+- **`_meta/welcome-quick-win`** — primera tarea garantizada en 5 min tras el onboarding. Pide URL pública del usuario (LinkedIn / web), ejecuta análisis de posicionamiento, genera 3 hooks LinkedIn + plan semana, todo empaquetado en HTML autocontenido y compartible. Es la skill que entrega el "primer wow".
+- **`_meta/six-hats`** — método de los 6 sombreros de Edward de Bono. Analiza decisiones desde 6 perspectivas separadas (proceso, datos, riesgos, oportunidades, creatividad, intuición). Universal y útil para cualquier emprendedor que toma decisiones grandes.
+- **`_meta/decisions-log`** — diario append-only de decisiones del operador. Inspirado directamente en [`Luispitik/claude-code-second-brain`](https://github.com/Luispitik/claude-code-second-brain) de Luis Pitik (con crédito explícito en SKILL.md y README). Mantiene a Claude coherente entre sesiones.
+- **`_meta/health-check`** — diagnóstico completo del OS. Verifica entorno, Sinapsis, brand-context, context sectorizado, skills curadas, settings, API keys. Devuelve reporte 🟢🟡🔴 con auto-fixes.
+- **`_meta/cognito`** (wrapper) — Sistema Operativo de Pensamiento de Luis Pitik vendoreado en `vendor/cognito/`. El installer la copia a `~/.claude/skills/cognito/` la primera vez. Mantenida intacta.
+- **`_meta/find-skills`** — descoverabilidad. Te ayuda a encontrar skills cuando el catálogo crezca por intent en lenguaje natural.
+- **`tools/tool-visual-explainer`** — genera HTML autocontenido y bonito para outputs compartibles (sin JS, móvil-first, paleta naranja iAmasters). Invocada por welcome-quick-win, six-hats, marketing-positioning, etc.
+
+### Added — Slash commands
+
+- **`/doctor`** — invoca `_meta/health-check` con presentación 🟢🟡🔴 + propuesta auto-fix
+- (Pendiente v0.5.0: `/welcome` y `/cognito-mode` como aliases explícitos)
+
+### Changed — Refactor crítico
+
+- **`AGENTS.md`** completamente reescrito. Sección principal nueva: "Si eres Claude Code y recibes el prompt URL canónico" con workflow paso-a-paso (clone → install → onboarding → welcome). Sección cross-tool conservada al final.
+- **`README.md`** rediseñado con:
+  - Sección "🚀 Instalación en 30 segundos" al inicio con prompt URL canónico copy-paste destacado
+  - Sección "💰 Coste real" transparente sobre Anthropic Pro/Max ($20-200/mes) — comunicación honesta antes que el miembro choque con la factura
+  - Lista de 18 skills core preinstaladas (12 v0.4.2 + 6 nuevas)
+  - Renovado bloque créditos con autoría correcta (Luis Pitik, De Bono, Anthropic skills)
+- **`scripts/install.sh`** robustecido:
+  - Detección OS (macOS / Linux / Windows-bash)
+  - Salida estructurada parseable: `[OK]`, `[SKIP]`, `[WARN]`, `[ERROR]` (Claude Code agent puede leer el output y reaccionar)
+  - Idempotente: ejecutar varias veces no rompe nada
+  - Crea `context/decisions-log.md` con header canónico
+  - Crea `projects/welcome/` directorio
+  - Step 7 nuevo: copia `vendor/cognito/` a `~/.claude/skills/cognito/` si no existe
+- **`meta-onboarding-wizard`** completamente reescrito:
+  - Entrevista por bloques temáticos (no todo de golpe — patrón second-brain)
+  - Llena 5 archivos sectorizados: `context/me.md`, `work.md`, `team.md`, `current-priorities.md`, `goals.md` (en lugar de `user.md` monolítico)
+  - Pregunta cognito mode (guiado / completo) y guarda en operator-state
+  - Lanza `welcome-quick-win` al cerrar para garantizar primer wow
+
+### Added — Documentación
+
+- **`docs/skills-recommended.md`** rediseñado:
+  - Catálogo Capa 2 con ~30 skills opcionales agrupadas por categoría
+  - Sección "Alternativa lean: claude-code-second-brain" con tabla "cuándo elegir uno u otro" — referencia y respeta a Luis
+  - Procesos de propuesta y retirada de skills del catálogo
+- **`context/README.md`** nuevo, explicando el patrón sectorizado
+- **`brand-context/README.md`** explicando qué skill genera cada archivo
+
+### Refactor — context/ sectorizado
+
+- `context/user.md` monolítico → 5 archivos sectorizados creados por el wizard:
+  - `me.md` — identidad personal (nombre, ubicación, descripción profesional)
+  - `work.md` — negocio, servicios, revenue, stack
+  - `team.md` — equipo (puede estar vacío si trabaja solo)
+  - `current-priorities.md` — foco del mes, cuello de botella
+  - `goals.md` — objetivos 12 meses
+- `context/decisions-log.md` nuevo (creado por install.sh con header)
+- `context/soul.md` y `context/learnings.md` mantenidos
+
+### Vendored
+
+- **`vendor/cognito/`** — sistema cognito de Luis Pitik vendoreado intacto (sin modificar). Incluye SKILL.md, modes/, phases/, profiles/, hooks/, commands/, integrations/, templates/, config/. Excluido: tests/, .git/, .github/.
+
+### Filosofía v0.4.3
+
+- **No inflar el catálogo**: pasamos de 12 → 18 skills core (todas validadas), no a 19 con sprint a ciegas. Catálogo Capa 2 disponible on-demand.
+- **Validación antes que construcción**: el experimento de Sesión 1 (Angel + URL canónico en Claude Desktop limpio) confirmó que el flow funcionará. Sprint v0.5.0 esperará a feedback real de uso, no a planificación a ciegas.
+- **Crédito explícito a Luis Pitik**: tres de las skills nuevas (decisions-log inspirada en second-brain, cognito vendoreada intacta, find-skills) referencian a Luis con atribución completa. Coherente con regla de las 6 capas de atribución.
 
 ---
 

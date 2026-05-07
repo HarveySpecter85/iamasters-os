@@ -9,10 +9,11 @@
 - **Skills del OS**: `.claude/skills/`
 - **Commands del OS**: `.claude/commands/`
 - **Brand context**: `brand-context/` (voice, positioning, ICP, assets)
-- **Agent context**: `context/` (soul.md, user.md, learnings.md)
-- **Proyectos**: `projects/` (por skill o `projects/briefs/<nombre>/`)
+- **Agent context sectorizado**: `context/` (me.md, work.md, team.md, current-priorities.md, goals.md, decisions-log.md, learnings.md, soul.md)
+- **Proyectos**: `projects/` (por skill, `projects/briefs/<nombre>/`, `projects/welcome/`, `projects/six-hats/`, `projects/visual/`)
 - **Clientes**: `clients/<nombre>/` (con `clients/_templates/` para nuevos)
 - **Docs operativos**: `docs/`
+- **Vendored**: `vendor/sinapsis/` (engine de memoria), `vendor/cognito/` (sistema operativo de pensamiento de Luis Pitik)
 
 ### Paths Sinapsis (engine global del operador)
 - **Skills root global**: `~/.claude/skills/` (Sinapsis instalado por install.sh)
@@ -25,12 +26,19 @@
 Antes de responder al primer mensaje del usuario, debes:
 
 1. Leer `~/.claude/skills/_operator-state.json` (Sinapsis: perfil del operador, decisiones, lecciones).
-2. Leer `context/user.md` (capa OS: usuario en el contexto de este repo).
-3. Comprobar `synapsis-bridge` siguiente:
+2. Leer los 5 archivos sectorizados de `context/` si existen: `me.md`, `work.md`, `team.md`, `current-priorities.md`, `goals.md` (capa OS).
+3. Leer `context/decisions-log.md` (últimas 5 entradas) para mantener coherencia con decisiones previas.
+4. Comprobar `synapsis-bridge` siguiente:
 
 ### Detección de primer arranque (onboarding)
 Si `~/.claude/skills/_operator-state.json` NO existe o tiene `needsOnboarding: true`:
 - → invoca la skill `meta-onboarding-wizard` que está en `.claude/skills/_meta/meta-onboarding-wizard/`.
+
+Si existe pero `context/me.md` NO existe (o está vacío):
+- → invoca `meta-onboarding-wizard` para llenar el contexto sectorizado.
+
+Si existe `context/me.md` pero `~/.claude/skills/_operator-state.json` tiene `welcomeCompleted: false`:
+- → invoca `welcome-quick-win` para entregar el primer wow del usuario.
 
 Si existe pero `brand-context/voice/voice-profile.md` NO existe:
 - → invoca `meta-start-here` para arrancar el flujo de brand context.
@@ -102,10 +110,52 @@ Lo que aporta este repo encima de Sinapsis:
 
 ## Skills registry (auto-mantenido)
 
-Lista canónica de skills instaladas en este repo:
+Lista canónica de skills instaladas en este repo (Capa 1, v0.4.3 = 18 skills core):
 
 <!-- skills-registry-start -->
-*(este bloque lo auto-mantiene el comando `/wrap-up` después de cada sesión donde se añadan/quiten skills)*
+
+### `_meta/` — sistema (10)
+
+| Skill | Descripción corta |
+|---|---|
+| `meta-skill-creator` | Crea skills nuevas siguiendo el patrón canónico |
+| `meta-onboarding-wizard` | Entrevista por bloques, sectoriza context/, lanza welcome al cerrar |
+| `meta-start-here` | Ritual diario de inicio |
+| `meta-wrap-up` | Ritual diario de cierre |
+| `welcome-quick-win` | Primera tarea garantizada en 5 min — el "primer wow" |
+| `six-hats` | Método 6 sombreros de Edward de Bono |
+| `decisions-log` | Diario append-only de decisiones (inspirado en second-brain de Luis) |
+| `health-check` | Diagnóstico del OS — invocada vía `/doctor` |
+| `cognito` (wrapper) | Sistema Operativo de Pensamiento de Luis Pitik (vendoreado en `vendor/cognito/`) |
+| `find-skills` | Descoverabilidad de skills por intent en lenguaje natural |
+
+### `marketing/` — voz y conversión (5)
+
+| Skill | Descripción corta |
+|---|---|
+| `marketing-brand-voice` | Voice profile + 3 registros A/B/C |
+| `marketing-positioning` | Análisis de posicionamiento competitivo |
+| `marketing-icp` | Cliente ideal: dolores, lenguaje, buying triggers |
+| `marketing-copywriting` | Copy con humanizer gate obligatorio |
+| `marketing-content-repurposing` | Distribución multiplataforma |
+
+### `tools/` — utilidades transversales (4)
+
+| Skill | Descripción corta |
+|---|---|
+| `tool-firecrawl-scraper` | Wrapper Firecrawl con fallback manual |
+| `tool-humanizer` | Quita patrones AI-tell del output |
+| `tool-output-verifier` | Gate de calidad (humanizer + voice + length) antes de entregar |
+| `tool-visual-explainer` | Genera HTML autocontenido compartible (sin JS, móvil-first) |
+
+### Slash commands
+
+`/start-here` · `/wrap-up` · `/doctor` · `/add-client` · `/install-skill` · `/install-mcp`
+
+### Capa 2 — on-demand library
+
+Ver [`docs/skills-recommended.md`](docs/skills-recommended.md) para ~30 skills opcionales (marketing, CRO, SEO, estrategia, operations) instalables vía `/install-skill <github-url>`.
+
 <!-- skills-registry-end -->
 
 ## Niveles de proyecto — heartbeat

@@ -1,189 +1,166 @@
-# Skills recomendadas (lista curada externa)
+# Skills recomendadas — Capa 2 (on-demand)
 
-> Lista de skills externas que NO vienen instaladas por defecto pero merecen consideración.
+Las **18 skills core** que vienen preinstaladas con iAmasters OS están en el README. Este documento lista las **skills opcionales** que puedes añadir cuando las necesites con `/install-skill <github-url>`.
+
+> **Filosofía**: la regla "max 30 skills, no 1000" del Agentic Academy aplica. Inflar el catálogo paraliza al miembro nuevo. Esta lista es **curada y opinada** — solo skills validadas en producción ≥2 semanas. No es exhaustiva ni inclusiva.
+
+> Última revisión: 2026-05-08 (v0.4.3)
+
+---
+
+## Cómo instalar una skill de esta lista
+
+```
+# Dentro de Claude Code en tu repo iAmasters OS:
+/install-skill https://github.com/<owner>/<skill-repo>
+```
+
+El comando:
+1. Clona la skill a `.claude/skills/<categoria>/<nombre>/` localmente
+2. Valida estructura (SKILL.md presente, YAML frontmatter, descripción ≥50 chars)
+3. Te pregunta si quieres globalizarla a `~/.claude/skills/` (skill compartida entre repos)
+
+---
+
+## Marketing — texto y campañas
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `copywriting` | Copy de landing pages y emails con humanizer gate y validación de no-fabricación | ⭐ Fácil |
+| `copy-editing` | Edita y mejora copy existente, proofreading, sweep de claridad | ⭐ Fácil |
+| `content-strategy` | Plan de contenido (qué escribir, frecuencia, distribución) | ⭐⭐ Media |
+| `email-sequence` | Drip campaigns, secuencias de bienvenida, lifecycle, abandoned cart | ⭐⭐ Media |
+| `email-marketing-bible` | Knowledge base de email marketing (908 fuentes, 4.798 insights) | ⭐ Fácil |
+| `social-content` | LinkedIn, X/Twitter, Instagram, TikTok, Facebook | ⭐ Fácil |
+| `ad-creative` | Variaciones de copy de ads (headlines, descriptions, primary text) | ⭐⭐ Media |
+| `launch-strategy` | Plan de lanzamiento de producto, feature, beta, ProductHunt | ⭐⭐⭐ Avanzada |
+| `paid-ads` | Google Ads, Meta, LinkedIn, X — campañas, ROAS, CPA | ⭐⭐⭐ Avanzada |
+| `cold-email` | B2B prospecting emails con follow-ups | ⭐⭐ Media |
+
+## CRO — conversión
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `page-cro` | Optimizar homepage, landing, pricing, feature pages | ⭐⭐ Media |
+| `form-cro` | Formularios contacto/lead/demo (NO signup) | ⭐⭐ Media |
+| `signup-flow-cro` | Optimización registration / signup / trial activation | ⭐⭐⭐ Avanzada |
+| `popup-cro` | Modales, exit-intent, banners, slide-ins | ⭐⭐ Media |
+| `paywall-upgrade-cro` | Paywalls, upgrade screens, upsells, feature gates | ⭐⭐⭐ Avanzada |
+| `onboarding-cro` | Activación post-signup, time-to-value | ⭐⭐⭐ Avanzada |
+| `ab-test-setup` | Diseñar e implementar A/B tests | ⭐⭐ Media |
+
+## SEO
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `seo-audit` | Audit técnico SEO completo | ⭐⭐ Media |
+| `ai-seo` | AEO/GEO/LLMO — optimizar para citaciones de LLMs | ⭐⭐ Media |
+| `schema-markup` | JSON-LD, structured data, rich snippets | ⭐⭐⭐ Avanzada |
+| `programmatic-seo` | Páginas SEO a escala con templates + datos | ⭐⭐⭐ Avanzada |
+
+## Estrategia y producto
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `pricing-strategy` | Decisiones de precio, packaging, freemium, free trial | ⭐⭐ Media |
+| `referral-program` | Programas de referidos, afiliados, viral loops | ⭐⭐ Media |
+| `product-marketing-context` | Document de positioning, ICP, foundational context | ⭐⭐ Media |
+| `marketing-ideas` | Generación de ideas de marketing y growth | ⭐ Fácil |
+| `marketing-psychology` | Aplicar principios psicológicos a marketing | ⭐⭐ Media |
+| `churn-prevention` | Cancellation flows, save offers, recovery | ⭐⭐⭐ Avanzada |
+| `revops` | Lead lifecycle, marketing-to-sales handoff, scoring | ⭐⭐⭐ Avanzada |
+| `sales-enablement` | Pitch decks, one-pagers, objection handling | ⭐⭐ Media |
+| `running-marketing-campaigns` | Plan completo end-to-end de campañas | ⭐⭐⭐ Avanzada |
+
+## Analítica y crecimiento
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `analytics-tracking` | GA4, conversion tracking, UTMs, event tracking | ⭐⭐ Media |
+| `saas-revenue-growth-metrics` | ARPU, MRR, ARR, churn, NRR, expansion, cohorts | ⭐⭐ Media |
+| `competitive-ads-extractor` | Extraer ads de competidores (Facebook/LinkedIn ad library) | ⭐⭐ Media |
+| `competitor-alternatives` | Páginas comparativa "X vs Y" para SEO + sales | ⭐⭐ Media |
+| `free-tool-strategy` | Free tools como growth driver | ⭐⭐⭐ Avanzada |
+
+## Operaciones (de plugin externo `operations:*`)
+
+Estas skills vienen del plugin `operations:*` de la suite de Cowork. Disponibles si tienes el plugin instalado:
+
+- `operations:process-optimization` — analizar y mejorar procesos
+- `operations:runbook` — crear runbooks operacionales
+- `operations:status-report` — reportes con KPIs, riesgos, action items
+- `operations:risk-assessment` — identificar y mitigar riesgos
+- `operations:capacity-plan` — planificación de capacidad
+- `operations:vendor-review` — evaluación de proveedores
+- `operations:change-request` — solicitudes de cambio con análisis impacto
+- `operations:compliance-tracking` — tracking compliance + audit prep
+- `operations:process-doc` — documentación de procesos (RACI, SOPs)
+
+## Tooling y archivos (oficiales Anthropic)
+
+| Skill | Para qué | Dificultad |
+|---|---|:-:|
+| `anthropic-skills:docx` | Crear, leer, editar Word docs | ⭐ Fácil |
+| `anthropic-skills:xlsx` | Manipular spreadsheets (xlsx, xlsm, csv, tsv) | ⭐ Fácil |
+| `anthropic-skills:pptx` | Crear y editar presentaciones | ⭐ Fácil |
+| `anthropic-skills:pdf` | Leer, combinar, dividir, marcar PDFs | ⭐ Fácil |
+
+> Las 4 skills de manejo de archivos office vienen oficialmente desde Anthropic. Recomendación: instalarlas SIEMPRE que el operador trabaje con clientes que mandan Excel/Word/PDF/PPT (mayoría).
+
+## Para sectores específicos
+
+Si la lista de skills no cubre tu vertical, mira si hay plantilla más específica:
+
+- **Médicos / Dental**: combinar `web-legal-audit` para RGPD + plantilla para clínicas
+- **Inmobiliarias**: combinar `programmatic-seo` + skills de local SEO
+- **B2B SaaS**: combinar `revops` + `saas-revenue-growth-metrics` + `pricing-strategy`
+- **E-commerce**: combinar `paywall-upgrade-cro` + `email-sequence` + `analytics-tracking`
+- **Educación / Formación online**: combinar `email-sequence` (cohortes) + `launch-strategy` (cada lanzamiento) + `churn-prevention` (retención)
+
+---
+
+## Alternativa lean: claude-code-second-brain
+
+Si **prefieres empezar más minimal** (sin clonar todo iAmasters OS), existe una alternativa más liviana del mismo autor de Sinapsis:
+
+> 🧠 **[claude-code-second-brain](https://github.com/Luispitik/claude-code-second-brain)** por [Luis Pitik](https://github.com/Luispitik)
 >
-> Última revisión: 2026-05-07
+> Pegas un prompt en Claude Code → te entrevista por secciones → genera un sistema de archivos persistente: CLAUDE.md master + `context/me.md, work.md, team.md, current-priorities.md, goals.md` + `decisions-log.md`. **Es la versión lean** de lo que hace iAmasters OS.
 
-Para instalar cualquiera:
+### Cuándo elegir uno u otro
 
-```
-/install-skill <github-url>
-```
+| Caso | Mejor opción |
+|---|---|
+| Quieres empezar minimal, sin skills curadas | **second-brain** |
+| Quieres skills marketing/CRO/SEO ya instaladas | **iamasters-os** |
+| Trabajas con múltiples clientes con brand context distinta | **iamasters-os** (templates verticales) |
+| Solo necesitas memoria persistente | **second-brain** |
+| Quieres comunidad + actualizaciones curadas | **iamasters-os** |
+| Eres muy técnico y quieres rolar tu propio sistema | **second-brain** + tus skills propias |
 
-El comando ejecuta `bash scripts/validate-skill.sh` y verifica estructura antes de instalar.
-
----
-
-## Cómo elegir skills externas
-
-Antes de instalar una skill nueva, hazte estas preguntas:
-
-1. **¿Resuelve un problema que tengo recurrente?** Si solo lo necesitas 1 vez, usa Claude vanilla.
-2. **¿La skill ya está cubierta por otra que tengo?** Skills que se solapan = canibalización (ninguna se activa cuando debe).
-3. **¿La descripción es específica?** Si dice "ayuda con marketing" sin más, no se va a activar bien.
-4. **¿Hay alternativa más barata en tokens?** Slash command custom puede valer.
-5. **¿El autor es de confianza?** Skills de Anthropic / repos conocidos / autores con track record.
-
-**Regla sólida**: nunca tener más de 30 skills activas. Mejor 20 curadas que 200 mediocres.
+iAmasters OS adopta el patrón de "context sectorizado + decisions-log" de second-brain con crédito explícito. Son productos hermanos del mismo autor (Luis), no competencia.
 
 ---
 
-## ⭐ Recomendadas para todos los avatares
+## Cómo proponer una skill nueva al catálogo
 
-### anthropic-skills:skill-creator
-**Repo**: https://github.com/anthropics/skills (oficial Anthropic)
-**Para qué**: el skill-creator oficial. Útil si quieres comparar con `meta-skill-creator` de iAmasters OS.
-**Conflicto**: sí, con `meta-skill-creator` local. Decide cuál mantener.
+Si has creado o encontrado una skill que crees que merece estar en este catálogo:
 
-### anthropic-skills:visual-explainer
-**Repo**: https://github.com/anthropics/skills
-**Para qué**: genera HTML auto-contenido para explicar visualmente conceptos, diffs, plans.
-**Cuándo invocar**: "explícame esto visualmente" / "genera diagrama de X".
-**Tokens**: medio (output puede ser grande).
+1. Asegúrate de que cumple los criterios:
+   - Sirve a ≥3 avatares iAmasters
+   - Output útil sin contexto previo del operador
+   - No depende de integraciones privadas (Skool, Wixin, etc.)
+   - No depende de información confidencial
+   - Validada en producción ≥2 semanas
 
-### anthropic-skills:pdf
-**Repo**: https://github.com/anthropics/skills
-**Para qué**: lectura/extracción/edición de PDFs. Combinar, dividir, rotar, marcar.
-**Cuándo invocar**: cualquier flujo con PDFs.
-**Conflicto**: no.
+2. Abre un issue o PR en [`iamasters-academy/iamasters-os`](https://github.com/iamasters-academy/iamasters-os) con:
+   - Link a la skill
+   - 1-2 ejemplos de uso real
+   - Categoría sugerida
+   - Por qué encaja en Capa 2
 
-### anthropic-skills:docx
-**Repo**: https://github.com/anthropics/skills
-**Para qué**: crear/leer/editar archivos .docx (Word).
-**Cuándo invocar**: entregables word para clientes que viven en Office.
-**Conflicto**: no.
+3. El maintainer (Angel) la revisa. Las que pasan se añaden al catálogo en próxima release.
 
-### anthropic-skills:xlsx
-**Repo**: https://github.com/anthropics/skills
-**Para qué**: spreadsheets — leer, editar, calcular fórmulas en .xlsx/.csv/.tsv.
-**Cuándo invocar**: análisis de data en Excel/CSV.
-**Conflicto**: no.
+## Cómo retirar una skill del catálogo
 
----
-
-## 🎯 Para avatar marketing / contenido
-
-### content-strategy
-**Para qué**: planning estratégico de qué contenido crear (no copy).
-**Combina con**: marketing-content-repurposing.
-
-### social-content
-**Para qué**: optimizar posts existentes para LinkedIn, Twitter, IG, TikTok.
-**Conflicto**: parcial con marketing-copywriting. Decide cuál usas.
-
-### email-marketing-bible
-**Para qué**: knowledge base masivo (908 fuentes) sobre email marketing. Útil para diagnósticos de deliverability, automation flows.
-**Tokens**: alto (es base de conocimiento extensa).
-
-### copywriting (genérica)
-**Para qué**: copywriting comercial focalizado en conversión.
-**Conflicto**: alto con marketing-copywriting de iAmasters OS. NO instalar a menos que sea muy diferenciado.
-
-### ad-creative
-**Para qué**: generar variaciones de copy de anuncios — headlines, descripciones, primary text.
-**Combina con**: marketing-copywriting + paid-ads.
-
----
-
-## 📊 Para avatar operations / strategy
-
-### marketing-psychology
-**Para qué**: aplicar principios psicológicos a copy/comunicación. Cognitive biases, persuasión, behavioral science.
-**Tokens**: medio.
-
-### product-management:write-spec
-**Para qué**: escribir feature specs / PRDs desde un problema.
-**Avatar**: si haces consultoría B2B con producto.
-
-### saas-revenue-growth-metrics
-**Para qué**: calcular MRR, churn, NRR, expansion. Para clientes SaaS.
-**Avatar**: consultoría B2B SaaS o agencia con clientes SaaS.
-
-### operations:process-optimization
-**Para qué**: analizar y mejorar procesos. Trigger: "este proceso es lento", "cómo agilizar".
-
-### operations:risk-assessment
-**Para qué**: identificar y mitigar riesgos operativos.
-**Avatar**: consultor B2B.
-
----
-
-## 🛠 Para avatar técnico / dev
-
-### nextjs-best-practices
-### nextjs-app-router-patterns
-### nextjs-seo
-### nextjs-supabase-auth
-**Para qué**: específicas de Next.js. Si construyes con Next.js, las 4 son útiles.
-
-### vercel-deployment
-**Para qué**: best practices de deploy en Vercel.
-
-### tailwind-design-system
-**Para qué**: construir design systems con Tailwind v4.
-
-### api-security-best-practices
-**Para qué**: hardening APIs (auth, rate limiting, input validation).
-
-### web-security-audit
-**Para qué**: auditoría tipo pentest black-box. 70+ tests OWASP. Genera report HTML.
-**Avatar**: dev / consultor seguridad.
-
----
-
-## ⚠️ Skills a EVITAR
-
-### Skills sin description clara
-Si la description tiene <50 chars o no especifica cuándo activar, va a competir mal contra otras y nunca se invocará bien. Lo confirma el script de Anthropic: descripciones malas activan correctamente solo 1/5 veces.
-
-### Skills duplicadas
-No instales 3 skills de copywriting. Una buena (la tuya o una externa) es mejor.
-
-### Skills que prometen "todo en uno"
-"Marketing Suite", "Content Master Pro", "Business Genius". Suelen ser wrappers genéricos. Skills específicas y atómicas funcionan mejor.
-
-### Skills auto-generadas sin track record
-Si la skill fue generada por LLM sin uso real, suele tener problemas de progressive disclosure (todo en SKILL.md, sin references/).
-
----
-
-## Cómo contribuir nuevas recomendaciones
-
-Para que añadamos una skill a esta lista:
-
-1. Probarla en producción mínimo 1 mes
-2. Documentar:
-   - Casos donde aporta valor real
-   - Avatar(s) que se beneficia
-   - Conflictos con skills nuestras
-   - Token cost aproximado
-3. Submit PR con la entrada en categoría apropiada
-
-No aceptamos "parece útil, instalad esto" sin experiencia real.
-
----
-
-## Token budget de skills
-
-Cada skill activa añade su `name + description` al system prompt. Aprox:
-- 30 chars name + 200 chars description = ~60 tokens por skill
-- 30 skills activas = ~1.800 tokens base solo de descripciones
-
-Cuando alguna se activa (Claude lee SKILL.md completo): 500-2.500 tokens extra por skill.
-
-**Regla práctica para v0**: 18-22 skills activas. Por encima ya hay riesgo de canibalización.
-
----
-
-## Lista corta para empezar (post-instalación de iAmasters OS)
-
-Si acabas de instalar iAmasters OS y quieres extender, este es el orden sugerido para añadir skills externas (de Anthropic, son seguras y bien hechas):
-
-1. `anthropic-skills:pdf` — útil casi siempre
-2. `anthropic-skills:docx` — para entregables Word
-3. `anthropic-skills:xlsx` — para análisis de Excel/CSV
-4. `anthropic-skills:visual-explainer` — para explicaciones visuales
-5. *(según avatar marketing)* `ad-creative` o `social-content`
-6. *(según avatar tech)* `nextjs-best-practices` + relacionadas
-
-Después: experimenta. Si algo no se activa bien tras 1 semana, desinstala.
+Si una skill se vuelve obsoleta, deprecated, o el autor la abandona, abre un issue. Las skills en este catálogo se renuevan trimestralmente.

@@ -1,256 +1,315 @@
 #!/bin/bash
 # ============================================================
-#  iAmasters OS — Installer for macOS / Linux
+#  iAmasters OS — Installer (macOS / Linux / Windows-bash)
 #  Sistema operativo agéntico para operadores de IA
-#  https://github.com/iamasters/iamasters-os
+#  https://github.com/iamasters-academy/iamasters-os
+# ============================================================
+#
+# Salida estructurada (parseable por Claude Code agent):
+#   [OK]    <componente>            — completado
+#   [SKIP]  <componente> · <motivo> — ya estaba o no aplica
+#   [WARN]  <componente> · <motivo> — sigue, pero con limitación
+#   [ERROR] <componente> · <motivo> — bloqueante, abort
+#
+# Idempotente: ejecutar varias veces NO rompe nada.
 # ============================================================
 
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-BOLD='\033[1m'
+# ── Output helpers ──
+ok()    { echo "[OK]    $*"; }
+skip()  { echo "[SKIP]  $*"; }
+warn()  { echo "[WARN]  $*"; }
+error() { echo "[ERROR] $*" >&2; exit 1; }
+info()  { echo ">>      $*"; }
 
-# Paths
+# ── Paths ──
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SINAPSIS_VENDOR="$REPO_ROOT/vendor/sinapsis"
 CLAUDE_HOME="$HOME/.claude"
 
 echo ""
-echo -e "${PURPLE}${BOLD}============================================================${NC}"
-echo -e "${PURPLE}${BOLD}  iAmasters OS — Sistema Operativo Agéntico${NC}"
-echo -e "${PURPLE}${BOLD}  Sinapsis (engine) + capa OS (skills, brand context)${NC}"
-echo -e "${PURPLE}${BOLD}============================================================${NC}"
+echo "============================================================"
+echo "  iAmasters OS — Installer v0.4.3"
+echo "  Repo: $REPO_ROOT"
+echo "============================================================"
 echo ""
 
-# ── Step 1: Prerequisites ──
-echo -e "${BLUE}[1/6]${NC} Comprobando prerequisitos..."
+# ── Step 1: Detect OS ──
+info "[1/7] Detectando sistema operativo..."
 
-if ! command -v claude &> /dev/null; then
-    echo -e "${RED}  ERROR${NC} Claude Code no encontrado en PATH"
-    echo -e "${RED}         Instálalo primero: https://claude.ai/code${NC}"
-    exit 1
-else
-    echo -e "${GREEN}  OK${NC} Claude Code detectado"
-fi
+OS_TYPE="unknown"
+case "$(uname -s)" in
+    Darwin*)  OS_TYPE="macos";  ok "Sistema: macOS ($(uname -m))" ;;
+    Linux*)   OS_TYPE="linux";  ok "Sistema: Linux ($(uname -m))" ;;
+    MINGW*|MSYS*|CYGWIN*)
+              OS_TYPE="windows-bash"
+              warn "Sistema: Windows + Git Bash detectado"
+              warn "Sistema: algunos comandos pueden fallar — usa WSL para mejor experiencia"
+              ;;
+    *)        warn "Sistema desconocido: $(uname -s) — continuamos pero algo puede fallar" ;;
+esac
 
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}  ERROR${NC} Node.js no encontrado. Instálalo: https://nodejs.org${NC}"
-    exit 1
-else
-    echo -e "${GREEN}  OK${NC} Node.js $(node --version) detectado"
-fi
+# ── Step 2: Prerequisites ──
+info "[2/7] Comprobando prerequisitos..."
 
-if ! command -v python3 &> /dev/null; then
-    echo -e "${YELLOW}  ! Python 3 no encontrado — algunos hooks Sinapsis se desactivarán${NC}"
-else
-    echo -e "${GREEN}  OK${NC} $(python3 --version) detectado"
-fi
-
+# Git
 if ! command -v git &> /dev/null; then
-    echo -e "${RED}  ERROR${NC} Git no encontrado. Es imprescindible.${NC}"
-    exit 1
-else
-    echo -e "${GREEN}  OK${NC} $(git --version) detectado"
+    error "Git no encontrado. Es imprescindible. Instálalo en https://git-scm.com"
 fi
+ok "Git: $(git --version | awk '{print $3}')"
 
-# ── Step 2: Detect Sinapsis state ──
-echo -e "${BLUE}[2/6]${NC} Comprobando Sinapsis (engine de memoria)..."
-
-SINAPSIS_INSTALLED=false
-if [ -f "$CLAUDE_HOME/skills/_catalog.json" ]; then
-    SINAPSIS_INSTALLED=true
-    echo -e "${GREEN}  OK${NC} Sinapsis ya instalado en $CLAUDE_HOME/skills/"
+# Node.js
+if ! command -v node &> /dev/null; then
+    warn "Node.js no encontrado · instala en https://nodejs.org (≥18) para que las skills JS funcionen"
 else
-    echo -e "${CYAN}  ->  Sinapsis no detectado — se instalará desde vendor/${NC}"
-fi
-
-# ── Step 3: Install Sinapsis if needed ──
-echo -e "${BLUE}[3/6]${NC} Instalando Sinapsis..."
-
-if $SINAPSIS_INSTALLED; then
-    echo -e "${YELLOW}  ! Sinapsis ya estaba instalado. Saltando instalación de engine.${NC}"
-    echo -e "${YELLOW}    Si quieres actualizar: cd vendor/sinapsis && bash install.sh${NC}"
-else
-    if [ ! -f "$SINAPSIS_VENDOR/install.sh" ]; then
-        echo -e "${RED}  ERROR${NC} vendor/sinapsis/install.sh no encontrado."
-        echo -e "${RED}         El repo no está completo — clónalo de nuevo.${NC}"
-        exit 1
+    NODE_VERSION=$(node --version | sed 's/v//')
+    NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
+    if [ "$NODE_MAJOR" -lt 18 ]; then
+        warn "Node.js $NODE_VERSION es viejo · recomendado ≥18"
+    else
+        ok "Node.js: v$NODE_VERSION"
     fi
-    echo -e "${CYAN}  ->  Ejecutando vendor/sinapsis/install.sh${NC}"
-    cd "$SINAPSIS_VENDOR"
-    bash install.sh
-    cd "$REPO_ROOT"
-    echo -e "${GREEN}  OK${NC} Sinapsis instalado"
 fi
 
-# ── Step 4: Initialize OS layer ──
-echo -e "${BLUE}[4/6]${NC} Inicializando capa OS..."
+# Python 3
+if ! command -v python3 &> /dev/null; then
+    warn "Python 3 no encontrado · algunos hooks Sinapsis requieren python3"
+else
+    ok "Python: $(python3 --version | awk '{print $2}')"
+fi
 
-# Crear placeholders en carpetas vacías para que git las trackee
-for empty_dir in "projects" "projects/briefs" "context" "brand-context/voice" "brand-context/positioning" "brand-context/icp" "brand-context/assets"; do
-    touch "$REPO_ROOT/$empty_dir/.gitkeep" 2>/dev/null || true
+# Claude Code
+# Detectamos varios paths posibles porque Claude Desktop no expone CLI estándar
+if command -v claude &> /dev/null; then
+    ok "Claude CLI presente en PATH"
+else
+    if [ -d "/Applications/Claude.app" ] || [ -d "$HOME/Applications/Claude.app" ]; then
+        ok "Claude Desktop detectado (macOS app, CLI no requerido)"
+    elif [ -n "$CLAUDE_DESKTOP" ] || [ -n "$CLAUDECODE" ]; then
+        ok "Variables de entorno Claude Code detectadas (ejecutándote desde Code)"
+    else
+        warn "Claude Code/Desktop no detectado en PATH · si lo tienes instalado, ignora este aviso"
+    fi
+fi
+
+# ── Step 3: Sinapsis vendor ──
+info "[3/7] Comprobando Sinapsis (engine de memoria)..."
+
+if [ ! -d "$SINAPSIS_VENDOR" ]; then
+    error "vendor/sinapsis/ no encontrado · el repo no está completo, vuelve a clonarlo"
+fi
+
+# Detectar si ya está instalada Sinapsis global
+SINAPSIS_INSTALLED=false
+if [ -f "$CLAUDE_HOME/skills/_catalog.json" ] || [ -f "$CLAUDE_HOME/skills/_operator-state.json" ]; then
+    SINAPSIS_INSTALLED=true
+    skip "Sinapsis: ya instalado en $CLAUDE_HOME/skills/ (no toco nada)"
+fi
+
+if ! $SINAPSIS_INSTALLED; then
+    if [ ! -f "$SINAPSIS_VENDOR/install.sh" ]; then
+        error "vendor/sinapsis/install.sh no encontrado · vuelve a clonar el repo"
+    fi
+    info "Ejecutando vendor/sinapsis/install.sh..."
+    cd "$SINAPSIS_VENDOR"
+    bash install.sh || error "Sinapsis install.sh falló · revisa el output anterior"
+    cd "$REPO_ROOT"
+    ok "Sinapsis instalado en $CLAUDE_HOME"
+fi
+
+# ── Step 4: OS layer · brand-context y context ──
+info "[4/7] Inicializando capa OS..."
+
+# Crear directorios necesarios (idempotente)
+mkdir -p "$REPO_ROOT/projects" "$REPO_ROOT/projects/briefs" "$REPO_ROOT/projects/welcome"
+mkdir -p "$REPO_ROOT/context"
+mkdir -p "$REPO_ROOT/brand-context/voice" "$REPO_ROOT/brand-context/positioning" "$REPO_ROOT/brand-context/icp" "$REPO_ROOT/brand-context/assets"
+
+# .gitkeep para tracking
+for empty_dir in "projects/briefs" "projects/welcome" "brand-context/voice" "brand-context/positioning" "brand-context/icp" "brand-context/assets"; do
+    [ ! -f "$REPO_ROOT/$empty_dir/.gitkeep" ] && touch "$REPO_ROOT/$empty_dir/.gitkeep" || true
 done
+ok "Directorios proyecto creados/verificados"
 
-# Soul.md y user.md base si no existen
+# Soul.md (estático — no lo crea el wizard, lo creamos aquí)
 if [ ! -f "$REPO_ROOT/context/soul.md" ]; then
     cat > "$REPO_ROOT/context/soul.md" <<'EOF'
-# Soul — personalidad del agente
+# Soul · personalidad del agente
 
-> Esta es la personalidad base del agente. La modificas tú a tu gusto.
-> Se complementa con tu operator-state.json (Sinapsis) y tu user.md.
+> Cómo respondes al usuario. Esto es estático (cambia poco).
 
-## Cómo respondes
-- Directo y sin rodeos. Si algo no tiene sentido, lo dices.
-- 2-3 opciones máximo con recomendación. El usuario tiene la última palabra.
-- No complaciente. Honesto sobre limitaciones y riesgos.
-- Tono cálido, no corporativo.
+## Tono
+- Directo, sin rodeos
+- Cálido pero no efusivo
+- 2-3 opciones máx con recomendación, no listas exhaustivas
 
-## Cómo razonas
-- Antes de actuar, planificas. Plan mode por defecto en proyectos > 10 min.
-- Validación humana antes de acciones destructivas (delete, push, send).
-- Si pierdes contexto, pides aclaración en lugar de inventar.
+## Idioma
+- Castellano siempre con el operador
+- Outputs cliente en el idioma configurado en `me.md`
 
-## Boundaries
-- Nunca commiteas .env ni credenciales.
-- Nunca envías mensajes externos (email, WhatsApp, Slack) sin aprobación explícita.
-- Nunca borras archivos: archivar siempre.
+## Lo que NO haces
+- Vender humo
+- Inflar palabras vacías
+- Ejecutar acciones destructivas sin confirmar
 
-## Continuidad
-- Siempre lees brand-context/ antes de generar contenido entregable.
-- Siempre lees context/learnings.md antes de invocar una skill ya conocida.
-- Siempre cierras sesión con /wrap-up para que mañana retomes el hilo.
+---
+*Última actualización: instalación inicial · este archivo lo modificas tú a tu gusto*
 EOF
-    echo -e "${GREEN}  OK${NC} context/soul.md creado"
+    ok "context/soul.md creado"
+else
+    skip "context/soul.md · ya existe"
 fi
 
-if [ ! -f "$REPO_ROOT/context/user.md" ]; then
-    cat > "$REPO_ROOT/context/user.md" <<'EOF'
-# User — perfil del operador en este repo
+# Decisions log (con header canónico)
+if [ ! -f "$REPO_ROOT/context/decisions-log.md" ]; then
+    cat > "$REPO_ROOT/context/decisions-log.md" <<'EOF'
+# Decisions log
 
-> Este archivo se rellena durante el onboarding (skill meta-onboarding-wizard).
-> Sinapsis mantiene el perfil global en ~/.claude/skills/_operator-state.json;
-> este es solo el contexto específico del repo (preferencias visuales, ejemplos,
-> conexiones a apps, etc).
+Diario append-only de decisiones del operador.
+Patrón inspirado en [claude-code-second-brain](https://github.com/Luispitik/claude-code-second-brain) de Luis Pitik.
 
-## Identidad básica (rellenar en onboarding)
-- Nombre:
-- Rol:
-- Avatar: (single business / freelance multi-cliente / agencia)
-- Idioma operativo: castellano
-- Email contacto:
+> Esta skill (`decisions-log`) se invoca automáticamente cuando
+> tomas una decisión estratégica. También puedes invocarla
+> manualmente: "registra esta decisión".
 
-## Stack que uso a menudo
-- Frontend:
-- Backend:
-- Deploy:
-- CRM/automatización:
-- Apps de productividad:
-
-## Mis valores innegociables
--
--
--
-
-## Mis cuellos de botella habituales
--
--
-
-## Apps externas conectadas (MCPs activos)
--
-
-## Notas adicionales
+---
 EOF
-    echo -e "${GREEN}  OK${NC} context/user.md creado"
+    ok "context/decisions-log.md creado (header canónico)"
+else
+    skip "context/decisions-log.md · ya existe"
 fi
 
+# Learnings (vacío, lo llenan las skills)
 if [ ! -f "$REPO_ROOT/context/learnings.md" ]; then
     cat > "$REPO_ROOT/context/learnings.md" <<'EOF'
-# Learnings — feedback consolidado de skills
+# Learnings
 
-> Este archivo lo auto-mantiene la skill meta-wrap-up al cerrar sesión.
-> Es el resumen humano-legible de lo que vive en synapsis instincts (estructurado).
+Feedback consolidado de skills, append-only.
+Cada sección corresponde a una skill que registró algo aprendido.
 
-## General
-*(vacío hasta que ejecutes skills y cierres sesiones)*
+> Lo mantiene la skill `meta-wrap-up` al cerrar sesión.
 
-## Por skill
-
-<!-- Las entradas se añaden por skill en formato:
-## skill-name
-- 2026-MM-DD: lección aprendida
--->
+---
 EOF
-    echo -e "${GREEN}  OK${NC} context/learnings.md creado"
+    ok "context/learnings.md creado"
+else
+    skip "context/learnings.md · ya existe"
 fi
 
-echo -e "${GREEN}  OK${NC} Capa OS inicializada"
+# Los 5 archivos sectorizados (me, work, team, priorities, goals) los crea el WIZARD,
+# no este script. Aquí solo dejamos un README explicativo en context/.
+if [ ! -f "$REPO_ROOT/context/README.md" ]; then
+    cat > "$REPO_ROOT/context/README.md" <<'EOF'
+# context/
 
-# ── Step 5: Hook script for skill change detection ──
-echo -e "${BLUE}[5/6]${NC} Instalando hook local del OS..."
+Contexto sectorizado del operador (patrón inspirado en [second-brain](https://github.com/Luispitik/claude-code-second-brain)).
 
-cat > "$REPO_ROOT/scripts/skill-change-detector.sh" <<'HOOKSCRIPT'
-#!/bin/bash
-# Detecta cambios en .claude/skills/ y los flagea en synapsis-pending.json
-# para que /wrap-up actualice el registry del CLAUDE.md.
+Los archivos siguientes los crea automáticamente la skill `meta-onboarding-wizard` la primera vez que abres Claude Code en este repo:
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PENDING_FILE="$REPO_ROOT/.claude/.skills-pending.json"
+- `me.md` — identidad personal (nombre, ubicación, descripción profesional)
+- `work.md` — negocio, servicios, revenue, stack
+- `team.md` — equipo (puede estar vacío si trabajas solo)
+- `current-priorities.md` — foco del mes, cuello de botella
+- `goals.md` — objetivos 12 meses
 
-# Lee tool input via stdin
-INPUT=$(cat 2>/dev/null || echo "{}")
+Y los siguientes ya existen y se mantienen automáticamente:
 
-# Solo actuamos si la edición fue en .claude/skills/
-if echo "$INPUT" | grep -q '"file_path".*\.claude/skills/'; then
-    mkdir -p "$REPO_ROOT/.claude"
-    echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"changed\":true}" > "$PENDING_FILE"
+- `soul.md` — personalidad del agente (estática)
+- `decisions-log.md` — diario append-only de decisiones (skill `decisions-log`)
+- `learnings.md` — feedback de skills (skill `meta-wrap-up`)
+
+Si quieres editarlos a mano: adelante, el wizard solo los crea la primera vez.
+EOF
+    ok "context/README.md creado"
 fi
-exit 0
-HOOKSCRIPT
 
-chmod +x "$REPO_ROOT/scripts/skill-change-detector.sh"
-echo -e "${GREEN}  OK${NC} Hook scripts/skill-change-detector.sh instalado"
+# ── Step 5: Brand context README ──
+info "[5/7] Inicializando brand-context/..."
 
-# ── Step 6: Final check ──
-echo -e "${BLUE}[6/6]${NC} Verificando instalación..."
+if [ ! -f "$REPO_ROOT/brand-context/README.md" ]; then
+    cat > "$REPO_ROOT/brand-context/README.md" <<'EOF'
+# brand-context/
+
+Tu marca: voz, posicionamiento, ICP, assets.
+
+Los archivos los generan estas skills (no se llenan en la instalación):
+
+- `marketing-brand-voice` → `voice/voice-profile.md`, `voice/samples.md`, `voice/register-{a,b,c}-*.md`
+- `marketing-positioning` → `positioning/positioning.md`
+- `marketing-icp` → `icp/icp.md`
+- `marketing-brand-voice` (con Firecrawl) → `assets/` (logos, colores, fuentes auto-extraídos)
+
+Los puedes generar tras el onboarding ejecutando `/start-here` y eligiendo "configurar brand voice".
+EOF
+    ok "brand-context/README.md creado"
+else
+    skip "brand-context/README.md · ya existe"
+fi
+
+# ── Step 6: .env from .env.example ──
+info "[6/7] Verificando .env..."
+
+if [ ! -f "$REPO_ROOT/.env" ]; then
+    if [ -f "$REPO_ROOT/.env.example" ]; then
+        cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+        ok ".env creado desde .env.example (rellena las claves cuando las tengas)"
+    else
+        warn ".env.example no encontrado · skill skipping"
+    fi
+else
+    skip ".env · ya existe (no se sobrescribe)"
+fi
+
+# ── Step 7: Vendored skills (cognito) → global install ──
+info "[7/8] Sincronizando skills vendoreadas..."
+
+if [ -d "$REPO_ROOT/vendor/cognito" ]; then
+    if [ ! -d "$CLAUDE_HOME/skills/cognito" ]; then
+        cp -r "$REPO_ROOT/vendor/cognito" "$CLAUDE_HOME/skills/cognito"
+        ok "cognito copiada a $CLAUDE_HOME/skills/cognito (desde vendor/cognito)"
+    else
+        skip "cognito · ya existe en $CLAUDE_HOME/skills/cognito (no se sobrescribe)"
+    fi
+else
+    warn "vendor/cognito · no encontrada en repo (skill cognito no disponible)"
+fi
+
+# ── Step 8: Final verification ──
+info "[8/8] Verificación final..."
 
 ISSUES=0
-[ ! -d "$CLAUDE_HOME/skills" ] && ISSUES=$((ISSUES+1)) && echo -e "${RED}  ! Sinapsis no se instaló correctamente${NC}"
-[ ! -f "$REPO_ROOT/CLAUDE.md" ] && ISSUES=$((ISSUES+1)) && echo -e "${RED}  ! CLAUDE.md no existe${NC}"
-[ ! -f "$REPO_ROOT/.claude/settings.json" ] && ISSUES=$((ISSUES+1)) && echo -e "${RED}  ! settings.json no existe${NC}"
+[ ! -d "$CLAUDE_HOME/skills" ] && ISSUES=$((ISSUES+1)) && warn "verify: $CLAUDE_HOME/skills no existe"
+[ ! -f "$REPO_ROOT/CLAUDE.md" ] && ISSUES=$((ISSUES+1)) && error "verify: CLAUDE.md no existe en repo (corrupto)"
+[ ! -f "$REPO_ROOT/.claude/settings.json" ] && ISSUES=$((ISSUES+1)) && warn "verify: .claude/settings.json no existe"
+[ ! -d "$REPO_ROOT/.claude/skills/_meta" ] && ISSUES=$((ISSUES+1)) && warn "verify: .claude/skills/_meta no existe"
 
 if [ $ISSUES -eq 0 ]; then
-    echo -e "${GREEN}  OK${NC} Todo en orden"
+    ok "Verificación final: todo en orden"
+else
+    warn "Verificación final: $ISSUES avisos · ejecuta /doctor en Claude Code para diagnóstico completo"
 fi
 
 # ── Done ──
 echo ""
-echo -e "${GREEN}${BOLD}============================================================${NC}"
-echo -e "${GREEN}${BOLD}  iAmasters OS instalado correctamente${NC}"
-echo -e "${GREEN}${BOLD}============================================================${NC}"
+echo "============================================================"
+echo "  ✓ iAmasters OS instalado en: $REPO_ROOT"
+echo "============================================================"
 echo ""
-echo -e "  ${BOLD}Siguiente paso:${NC}"
-echo -e "  1. Asegúrate de estar en este repo: ${CYAN}cd $REPO_ROOT${NC}"
-echo -e "  2. Arranca Claude Code: ${CYAN}claude${NC}"
-echo -e "  3. La primera vez se ejecutará el onboarding wizard automáticamente"
+echo "  Siguiente paso:"
+echo "    1. Asegúrate de tener Claude Desktop con plan Pro o Max"
+echo "    2. Abre la tab Code en Claude Desktop"
+echo "    3. Usa 'Open folder' y selecciona: $REPO_ROOT"
+echo "    4. La primera vez se ejecutará el onboarding wizard automáticamente"
 echo ""
-echo -e "  ${BOLD}Comandos útiles:${NC}"
-echo -e "  ${CYAN}/start-here${NC}      — Ritual de inicio de sesión"
-echo -e "  ${CYAN}/wrap-up${NC}         — Cierre de sesión + commit"
-echo -e "  ${CYAN}/system-status${NC}   — Dashboard Sinapsis (engine)"
-echo -e "  ${CYAN}/add-client${NC}      — Crear cliente nuevo"
+echo "  Comandos útiles dentro de Claude Code:"
+echo "    /welcome      — Genera tu primer entregable (5 min)"
+echo "    /doctor       — Diagnóstico del OS"
+echo "    /start-here   — Ritual de inicio diario"
+echo "    /wrap-up      — Cierre de sesión + commit"
 echo ""
-echo -e "  ${BOLD}Documentación:${NC}"
-echo -e "  - README.md         — Visión general"
-echo -e "  - CLAUDE.md         — Instrucciones para Claude (núcleo del repo)"
-echo -e "  - docs/             — Guías de operación"
+echo "  Si vienes del prompt URL conversacional:"
+echo "    Claude Code ya está procesando · sigue sus instrucciones"
 echo ""
-echo -e "${PURPLE}  El OS aprende de ti. Cada sesión alimenta la siguiente.${NC}"
-echo ""
+exit 0
