@@ -9,9 +9,65 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Próximas versiones (en backlog)
-- v0.6.0: skills nativas en español (meeting-notes, proposal-writer, youtube-transcript, linkedin-posts) reescritas con voice profile del operador
-- v0.7.0: dashboard del OS (pendiente decidir si se integra con dashboard Sinapsis)
+- v0.7.0: skills nativas en español (meeting-notes, proposal-writer, youtube-transcript, linkedin-posts) reescritas con voice profile del operador
+- v0.8.0: dashboard del OS (pendiente decidir si se integra con dashboard Sinapsis)
 - v1.0.0: release pública estable + vídeos Loom integrados + landing en iamastersacademy.com/os
+
+---
+
+## v0.6.0 — Install Gate · state machine anti-instalación-fantasma (2026-05-15)
+
+> **Por qué esta release**: el primer feedback negativo de la comunidad reportó una instalación que parecía completa pero no lo estaba — el agente Claude del usuario había creado archivos JSON "fantasma" simulando que Sinapsis se instaló, cuando en realidad había fallado por Python en Windows. Esta versión cierra esa puerta a nivel estructural: hay un state machine persistente, un hook SessionStart que bloquea respuestas si la instalación no está completa, y validación profunda en cada fase.
+
+### Added — Install gate con state machine
+
+- **`scripts/_install-state.template.json`** (nuevo) — template del state machine persistente. Tras `install.sh`, vive en `~/.claude/skills/_install-state.json` con 6 fases tipadas: `prereqs`, `sinapsis-engine`, `context-files`, `operator-state`, `welcome-completed`, `deep-dive-completed` (esta última deferrable).
+- **`scripts/_install-gate.sh`** (nuevo) — hook SessionStart en bash + node. Lee el state file y, si hay fases `required: true` no `done`, inyecta `additionalContext` al modelo: `"[INSTALL GATE] Installation incomplete. Before responding to the user, you MUST execute /install --resume."`. Es enforcement real — la harness lo ejecuta antes de que el modelo vea el primer mensaje, no depende de la voluntad del modelo de leer el CLAUDE.md.
+- **`docs/install-state-schema.md`** (nuevo) — spec completa del schema: estados por fase, contrato de quién escribe qué, validación de "done", edge cases (sesión rota a mitad, drift, reinstalación).
+- **Comandos `/install` y `/install-status`** en `.claude/commands/` — orquestador reentrante y dashboard read-only. `/install` lee el state, identifica la fase pendiente y la ejecuta (script bash desde terminal si es `prereqs`/`sinapsis-engine`, skill conversacional si es `context-files`/`operator-state`/`welcome-completed`). `--resume` continúa desde donde se quedó. `--force-reinstall` requiere confirmación explícita y hace backup del state.
+
+### Changed — `scripts/install.sh` reescrito completo
+
+- **Detección Python multi-plataforma**: intenta `python3` → `py -3` → `python` → `python3.11/12/10` → rutas absolutas Windows (`/c/Python311/python.exe` etc.). Resuelve el caso típico Windows + Microsoft Store launcher que rompía la v0.5.x.
+- **Validación profunda de Sinapsis** (función `validate_sinapsis_deep`): no se conforma con "el archivo existe". Comprueba JSON parseable, hooks ejecutables (`_passive-activator.sh`, `_session-learner.sh`, etc.), settings.json con sección hooks, y conteo ≥1 de `SKILL.md` reales. Si Sinapsis se instaló pero la validación profunda falla, marca `failed` con detalle en `errors[]` y aborta.
+- **Modo `--resume`**: si el state file existe con fases `done`, las salta. Continúa solo desde la primera no completada. Idempotente — ejecutar varias veces no rompe nada.
+- **Modo `--force-reinstall`**: backup del state actual a `_install-state.<timestamp>.bak`, borra y arranca limpio.
+- **`compute_and_store_checksum`** — guarda hash sha256 de los archivos críticos de Sinapsis (`_*.json` + `_*.sh`) en el state. `health-check` puede detectar drift posterior comparando.
+- **`register_session_start_hook`** — modifica `~/.claude/settings.json` para añadir el hook SessionStart preservando todos los hooks existentes de Sinapsis (PreToolUse, PostToolUse, Stop, PreCompact). Idempotente: no duplica si ya está registrado.
+- **Output estructurado** mantenido: `[OK]/[SKIP]/[WARN]/[ERROR]`. Cada fase escribe su estado al state file en cuanto termina, no al final.
+
+### Changed — `meta-onboarding-wizard` con commits incrementales
+
+- **De entrevista monolítica a 4 sub-fases con commits**. La v0.5 escribía los 4 archivos de `context/` al final ("Solo cuando las 8 dimensiones tienen dato sólido"). La v0.6 escribe cada archivo **inmediatamente** al cerrar su sub-fase:
+  - W1 Identidad → `context/me.md` + actualiza state
+  - W2 Negocio → `context/work.md` + actualiza state
+  - W3 Foco → `context/current-priorities.md` + `context/goals.md` + actualiza state
+  - W4 Config técnica → `~/.claude/skills/_operator-state.json` + marca `context-files.status: done` + `operator-state.status: done`
+- **Reentrada inteligente**: al arrancar lee `phases.context-files.filesCreated` y empieza en la primera sub-fase con archivos pendientes. Si el usuario hizo W1+W2 ayer, hoy retoma en W3 con un saludo breve, sin repetir la apertura completa.
+- **Comportamiento ante "para"** definido y persistido: marca `pausedBy: user` con la sub-fase actual, no insiste, no reporta como completo. La siguiente sesión el hook lo detecta y guía a `/install --resume`.
+- **Validación post-commit anti-fantasma**: al cerrar cada sub-fase verifica que el archivo escrito existe con >100 chars de contenido real. Si la validación falla, NO marca `done`. Avisa al usuario y deja la fase `in-progress`.
+
+### Changed — `health-check` con validación profunda y detección de drift
+
+- **Antes**: comprobaba presencia de archivos. **Ahora**: parsea JSON, valida campos mínimos, ejecuta `test -x` sobre hooks, mide tamaño de archivos críticos (`me.md` debe tener >100 chars y `## Nombre` con valor real).
+- **DRIFT detection** (nuevo): si el state machine dice que una fase está `done` pero la validación profunda falla, lo reporta como 🔴 **STATE DRIFT** y ofrece revertir el state a `in-progress` para que el sistema fuerce re-ejecución. Requiere confirmación literal "sí, revertir" — no es auto-fix por defecto.
+- **Cruce con state machine**: la skill ahora usa `~/.claude/skills/_install-state.json` como fuente de verdad sobre qué *debería* estar instalado, y compara con el estado real del disco.
+
+### Changed — `CLAUDE.md` del repo
+
+- **Sección `⛔ INSTALLATION GATE` al inicio del documento**, antes que cualquier otra cosa. Imposible de ignorar visualmente. Define el contrato anti-fantasma: nunca crear archivos manualmente para simular instalación, nunca reportar `done` sin que el state lo confirme.
+- Movida la sección `MANDATORY first action` a *post-gate*. Añadida instrucción explícita de leer planes activos en `.claude/plans/` (caso del feedback).
+
+### Fixed
+
+- **Detección "Sinapsis ya instalada" falsa positiva**: la v0.5.x consideraba Sinapsis instalada con solo la presencia de `_catalog.json` o `_operator-state.json`. Si el agente del usuario había creado esos archivos previamente (caso del feedback), el script saltaba la instalación real. Ahora se valida que esos JSON sean parseables, que los hooks de Sinapsis sean ejecutables y que haya al menos 1 `SKILL.md` real instalada.
+
+### Migración desde v0.5.x
+
+Para operadores que ya tenían v0.5.x funcionando:
+1. `git pull` para traer v0.6.0
+2. `bash scripts/install.sh --resume` — el script detectará que Sinapsis ya estaba instalada (validación profunda pasa), creará el `_install-state.json` retroactivamente con `sinapsis-engine.status: done` y `prereqs.status: done`, y registrará el hook SessionStart.
+3. Si el operator-state ya tenía `needsOnboarding: false`, el wizard marca `context-files` y `operator-state` como `done` también — la migración es transparente y no rompe la instalación existente.
 
 ---
 

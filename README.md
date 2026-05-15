@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/iamasters-academy/iamasters-os/releases"><img src="https://img.shields.io/badge/version-v0.5.2-orange.svg" alt="Version"></a>
+  <a href="https://github.com/iamasters-academy/iamasters-os/releases"><img src="https://img.shields.io/badge/version-v0.6.0-orange.svg" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="vendor/sinapsis/"><img src="https://img.shields.io/badge/engine-Sinapsis%20v4.5-purple.svg" alt="Powered by Sinapsis"></a>
   <a href="https://angelaparicio.com"><img src="https://img.shields.io/badge/maintained%20by-Angel%20Aparicio-ff8c42.svg" alt="Maintained by Angel Aparicio"></a>
@@ -19,19 +19,34 @@
 
 ---
 
-## 🚀 Instalación en 30 segundos
+## 🚀 Instalación (v0.6 — con install gate)
 
-**Si tienes [Claude Desktop](https://claude.com/download) (Pro o Max), abre la tab `Code` y pega este mensaje exacto en el chat:**
+**Camino corto (recomendado)** — desde terminal:
 
+```bash
+git clone https://github.com/iamasters-academy/iamasters-os.git ~/iamasters-os
+cd ~/iamasters-os
+bash scripts/install.sh
 ```
-Instala iAmasters OS desde
-https://github.com/iamasters-academy/iamasters-os
-y guíame en el setup
+
+Esto instala las fases técnicas (prereqs + Sinapsis engine) con validación profunda. Cuando termine, abre Claude Code en esta carpeta y el resto se completa por dentro:
+
+1. El hook **SessionStart** detecta que faltan fases (onboarding + welcome) y guía al agente.
+2. El agente invoca el comando `/install` que orquesta las 4 fases conversacionales restantes.
+3. El **onboarding wizard** te entrevista por sub-fases con **commits incrementales**: si te interrumpes a mitad, lo guardado queda guardado y `/install --resume` retoma exactamente donde lo dejaste.
+4. Tras el wizard se genera tu primer entregable (`welcome-quick-win`, ~5 min).
+
+Total realista: 15-20 minutos.
+
+**¿Algo falla?** Ejecuta:
+```bash
+bash scripts/install.sh --resume        # continúa desde la última fase exitosa
+bash scripts/install.sh --force-reinstall  # backup del state actual y arranca limpio
 ```
 
-Claude Code clonará el repo, ejecutará el instalador, te entrevistará por bloques (~10 min) y generará tu primer entregable real (~5 min). Total: ~15-20 min.
+Y desde dentro de Claude Code: `/install-status` te muestra el dashboard sin tocar nada.
 
-> 💡 **Para no técnicos**: en Claude Desktop, activa "omitir permisos" (skip permissions) la primera vez. El sistema no toca nada destructivo, solo te ahorrará confirmar 20 veces.
+> 💡 **Por qué este flujo** (v0.6+): la versión anterior reportaba a veces "todo instalado" cuando partes habían fallado silenciosamente. Ahora hay un **state machine persistente** en `~/.claude/skills/_install-state.json` que es la fuente de verdad sobre qué está realmente instalado. Validación profunda, no solo presencia de archivos. Ver [`docs/install-state-schema.md`](docs/install-state-schema.md).
 
 ¿No tienes Claude Desktop todavía? [Descárgalo aquí](https://claude.com/download). ¿No sabes qué plan necesitas? Ver [💰 Coste real](#-coste-real) abajo.
 
@@ -85,19 +100,19 @@ No requiere conocimientos de programación. Sí requiere paciencia para configur
 
 > Si vienes de iAmasters Academy: tu membresía NO incluye Anthropic. Son cuentas separadas. Lo decimos claro porque otros productos lo esconden.
 
-## Instalación alternativa (sin prompt conversacional)
+## Instalación alternativa (vía Claude Code)
 
-Si prefieres clonar manualmente:
+Si prefieres lanzar todo desde Claude Code (no recomendado para v0.6 — el script técnico se ejecuta mejor desde terminal):
 
-```bash
-git clone https://github.com/iamasters-academy/iamasters-os.git ~/iamasters-os
-cd ~/iamasters-os
-bash scripts/install.sh
+```
+Instala iAmasters OS desde
+https://github.com/iamasters-academy/iamasters-os
+y guíame en el setup
 ```
 
-Luego abre Claude Code en esa carpeta y se lanzará el onboarding.
+Claude Code clonará el repo y te indicará abrir terminal para ejecutar `bash scripts/install.sh` (las fases técnicas necesitan terminal). Tras eso, el flujo es el mismo: el install gate guía las fases restantes.
 
-Detalle completo en [`docs/installation.md`](docs/installation.md).
+Detalle completo en [`docs/installation.md`](docs/installation.md) y schema del state machine en [`docs/install-state-schema.md`](docs/install-state-schema.md).
 
 ## Después de instalar
 
@@ -105,9 +120,11 @@ Lo más útil para arrancar:
 
 | Comando / acción | Qué hace |
 |---|---|
-| Onboarding wizard (auto) | Te entrevista por bloques, llena tu contexto sectorizado |
+| `/install` | Orquesta la instalación por fases. Reentrante con `--resume` (v0.6) |
+| `/install-status` | Dashboard read-only del state machine (v0.6) |
+| Onboarding wizard (auto) | Te entrevista por sub-fases con commits incrementales |
 | `/welcome` | Genera tu primer entregable HTML compartible (5 min) |
-| `/doctor` | Diagnostica el OS, propone fixes si hay algo roto |
+| `/doctor` | Diagnostica el OS con validación profunda, detecta drift, propone fixes |
 | `/start-here` | Ritual diario de inicio: resumen ayer + propuesta hoy |
 | `/wrap-up` | Ritual de cierre: registra deliverables, decisiones, lecciones |
 
@@ -220,7 +237,8 @@ Ver [`CHANGELOG.md`](CHANGELOG.md) para historial detallado.
 - **v0.4.0** ✅ MCPs curated + atribución (6 capas)
 - **v0.4.3** ✅ Plug-and-play (URL conversacional, /doctor, welcome quick-win, six-hats, decisions-log, sectorización context)
 - **v0.5.0** ✅ Sistema vivo + skills automation/email/strategy + comando `/aprende` (tour de 5 días) + showcase pre-poblado + plugins Anthropic vía marketplace
-- **v0.6.0** — Skills nativas en español (meeting-notes, proposal-writer, youtube-transcript, linkedin-posts) reescritas con voice profile del operador
+- **v0.6.0** ✅ **Install gate** con state machine persistente, validación profunda anti-"instalación fantasma", hook SessionStart, onboarding por sub-fases con commits incrementales, comandos `/install` y `/install-status`, detección Python multi-plataforma
+- **v0.7.0** — Skills nativas en español (meeting-notes, proposal-writer, youtube-transcript, linkedin-posts) reescritas con voice profile del operador
 - **v1.0.0** — release pública estable + vídeos Loom integrados + landing en iamastersacademy.com/os
 
 ## 🌱 Sistema vivo

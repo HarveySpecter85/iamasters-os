@@ -23,11 +23,30 @@ desktop.ini
 # Operator data — privado por usuario, no se commitea
 context/daily-memory/
 context/user.md
+context/me.md
+context/work.md
+context/team.md
+context/current-priorities.md
+context/goals.md
+context/decisions-log.md
+context/learnings.md
+context/soul.md
 brand-context/voice/voice-profile.md
 brand-context/voice/samples.md
+brand-context/voice/vocabulary.md
+brand-context/voice/audit-prompt.md
+brand-context/voice/installation.md
+brand-context/voice/register-a-*.md
+brand-context/voice/register-b-*.md
+brand-context/voice/register-c-*.md
 brand-context/positioning/positioning.md
 brand-context/icp/icp.md
 brand-context/assets/
+
+# v0.6 — state machine vive en ~/.claude/skills/, nunca en el repo
+# (por si acaso se generara aquí por error)
+_install-state.json
+_install-state.*.bak
 
 # Project outputs — son del usuario, no del repo
 projects/briefs/*

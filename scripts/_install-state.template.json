@@ -1,0 +1,73 @@
+{
+  "version": "0.6.0",
+  "schemaVersion": 1,
+  "repoPath": "",
+  "startedAt": null,
+  "lastUpdatedAt": null,
+  "currentPhase": "prereqs",
+  "completedPhases": [],
+  "phases": {
+    "prereqs": {
+      "status": "pending",
+      "required": true,
+      "validatedAt": null,
+      "checks": {},
+      "warnings": [],
+      "owner": "install.sh"
+    },
+    "sinapsis-engine": {
+      "status": "pending",
+      "required": true,
+      "validatedAt": null,
+      "validation": {
+        "operator_state_json_valid": false,
+        "catalog_json_valid": false,
+        "hooks_executable": false,
+        "skills_count": 0
+      },
+      "checksum": null,
+      "owner": "install.sh"
+    },
+    "context-files": {
+      "status": "pending",
+      "required": true,
+      "startedAt": null,
+      "filesCreated": [],
+      "filesPending": [
+        "context/me.md",
+        "context/work.md",
+        "context/current-priorities.md",
+        "context/goals.md"
+      ],
+      "owner": "meta-onboarding-wizard"
+    },
+    "operator-state": {
+      "status": "pending",
+      "required": true,
+      "validatedAt": null,
+      "fields": {
+        "needsOnboarding": null,
+        "onboardingDate": null,
+        "technicalLevel": null,
+        "clientOutputLanguage": null
+      },
+      "owner": "meta-onboarding-wizard"
+    },
+    "welcome-completed": {
+      "status": "pending",
+      "required": true,
+      "deliverablePath": null,
+      "owner": "welcome-quick-win"
+    },
+    "deep-dive-completed": {
+      "status": "pending",
+      "required": false,
+      "deferrable": true,
+      "owner": "meta-deep-dive"
+    }
+  },
+  "pausedBy": null,
+  "pausedAt": null,
+  "pausedAtPhase": null,
+  "errors": []
+}

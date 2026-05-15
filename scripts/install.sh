@@ -1,17 +1,30 @@
 #!/bin/bash
 # ============================================================
-#  iAmasters OS — Installer (macOS / Linux / Windows-bash)
+#  iAmasters OS — Installer v0.6 (state-machine, reentrant)
 #  Sistema operativo agéntico para operadores de IA
 #  https://github.com/iamasters-academy/iamasters-os
 # ============================================================
 #
-# Salida estructurada (parseable por Claude Code agent):
-#   [OK]    <componente>            — completado
-#   [SKIP]  <componente> · <motivo> — ya estaba o no aplica
-#   [WARN]  <componente> · <motivo> — sigue, pero con limitación
-#   [ERROR] <componente> · <motivo> — bloqueante, abort
+# Cambios vs v0.5:
+#   • State machine persistente en ~/.claude/skills/_install-state.json
+#   • Validación profunda de Sinapsis (no solo "el archivo existe")
+#   • Detección Python multi-plataforma (python3 / py -3 / python)
+#   • Modo --resume: continúa desde la última fase exitosa
+#   • Modo --force-reinstall: backup del state y arranque limpio
+#   • Si una fase falla, queda `failed` en el state (no aborto silencioso)
 #
-# Idempotente: ejecutar varias veces NO rompe nada.
+# Flags:
+#   --resume            Continúa desde la última fase no completada
+#   --force-reinstall   Backup del state actual y arranque desde cero
+#   --skip-sinapsis     (debug) Salta la instalación de Sinapsis
+#
+# Salida estructurada (parseable):
+#   [OK]    <fase>            — completada
+#   [SKIP]  <fase> · <motivo> — ya estaba o no aplica
+#   [WARN]  <fase> · <motivo> — sigue con limitación
+#   [ERROR] <fase> · <motivo> — bloqueante, queda en state como failed
+#
+# Idempotente y reentrante.
 # ============================================================
 
 set -e
@@ -20,122 +33,498 @@ set -e
 ok()    { echo "[OK]    $*"; }
 skip()  { echo "[SKIP]  $*"; }
 warn()  { echo "[WARN]  $*"; }
-error() { echo "[ERROR] $*" >&2; exit 1; }
+err()   { echo "[ERROR] $*" >&2; }
 info()  { echo ">>      $*"; }
+title() { echo ""; echo "── $* ──"; }
 
 # ── Paths ──
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SINAPSIS_VENDOR="$REPO_ROOT/vendor/sinapsis"
 CLAUDE_HOME="$HOME/.claude"
+SKILLS_DIR="$CLAUDE_HOME/skills"
+STATE_FILE="$SKILLS_DIR/_install-state.json"
+STATE_TEMPLATE="$SCRIPT_DIR/_install-state.template.json"
+
+# ── Flags ──
+RESUME=false
+FORCE_REINSTALL=false
+SKIP_SINAPSIS=false
+for arg in "$@"; do
+    case "$arg" in
+        --resume)          RESUME=true ;;
+        --force-reinstall) FORCE_REINSTALL=true ;;
+        --skip-sinapsis)   SKIP_SINAPSIS=true ;;
+        *) ;;
+    esac
+done
 
 echo ""
 echo "============================================================"
-echo "  iAmasters OS — Installer v0.5.1"
+echo "  iAmasters OS — Installer v0.6.0"
 echo "  Repo: $REPO_ROOT"
 echo "============================================================"
 echo ""
 
-# ── Step 1: Detect OS ──
-info "[1/7] Detectando sistema operativo..."
+# ── JSON helpers (usamos node, que Sinapsis ya requiere) ──
+# Si node no está, los reemplazos usan python3 (que casi todo el mundo tiene).
 
-OS_TYPE="unknown"
-case "$(uname -s)" in
-    Darwin*)  OS_TYPE="macos";  ok "Sistema: macOS ($(uname -m))" ;;
-    Linux*)   OS_TYPE="linux";  ok "Sistema: Linux ($(uname -m))" ;;
-    MINGW*|MSYS*|CYGWIN*)
-              OS_TYPE="windows-bash"
-              warn "Sistema: Windows + Git Bash detectado"
-              warn "Sistema: algunos comandos pueden fallar — usa WSL para mejor experiencia"
-              ;;
-    *)        warn "Sistema desconocido: $(uname -s) — continuamos pero algo puede fallar" ;;
-esac
-
-# ── Step 2: Prerequisites ──
-info "[2/7] Comprobando prerequisitos..."
-
-# Git
-if ! command -v git &> /dev/null; then
-    error "Git no encontrado. Es imprescindible. Instálalo en https://git-scm.com"
-fi
-ok "Git: $(git --version | awk '{print $3}')"
-
-# Node.js
-if ! command -v node &> /dev/null; then
-    warn "Node.js no encontrado · instala en https://nodejs.org (≥18) para que las skills JS funcionen"
-else
-    NODE_VERSION=$(node --version | sed 's/v//')
-    NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
-    if [ "$NODE_MAJOR" -lt 18 ]; then
-        warn "Node.js $NODE_VERSION es viejo · recomendado ≥18"
+JSON_RUNTIME=""
+detect_json_runtime() {
+    if command -v node >/dev/null 2>&1; then
+        JSON_RUNTIME="node"
+    elif command -v python3 >/dev/null 2>&1; then
+        JSON_RUNTIME="python3"
+    elif command -v python >/dev/null 2>&1 && python --version 2>&1 | grep -q "Python 3"; then
+        JSON_RUNTIME="python"
     else
-        ok "Node.js: v$NODE_VERSION"
+        return 1
     fi
-fi
+}
 
-# Python 3
-if ! command -v python3 &> /dev/null; then
-    warn "Python 3 no encontrado · algunos hooks Sinapsis requieren python3"
-else
-    ok "Python: $(python3 --version | awk '{print $2}')"
-fi
+json_validate() {
+    # $1 = path to JSON file
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "JSON.parse(require('fs').readFileSync('$1','utf8'))" 2>/dev/null
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "import json; json.load(open('$1'))" 2>/dev/null
+            ;;
+    esac
+}
 
-# Claude Code
-# Detectamos varios paths posibles porque Claude Desktop no expone CLI estándar
-if command -v claude &> /dev/null; then
-    ok "Claude CLI presente en PATH"
-else
-    if [ -d "/Applications/Claude.app" ] || [ -d "$HOME/Applications/Claude.app" ]; then
-        ok "Claude Desktop detectado (macOS app, CLI no requerido)"
+json_set_phase() {
+    # $1 = phase name, $2 = field (status|validatedAt|...), $3 = value (must be valid JSON literal)
+    local phase="$1"
+    local field="$2"
+    local value="$3"
+
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const fs = require('fs');
+                const f = '$STATE_FILE';
+                const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+                if (!s.phases['$phase']) s.phases['$phase'] = {};
+                s.phases['$phase']['$field'] = $value;
+                s.lastUpdatedAt = new Date().toISOString();
+                fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json, datetime
+f = '$STATE_FILE'
+s = json.load(open(f))
+s['phases'].setdefault('$phase', {})
+s['phases']['$phase']['$field'] = $value
+s['lastUpdatedAt'] = datetime.datetime.utcnow().isoformat() + 'Z'
+json.dump(s, open(f, 'w'), indent=2)
+"
+            ;;
+    esac
+}
+
+json_set_root() {
+    # $1 = field, $2 = JSON value
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const fs = require('fs');
+                const f = '$STATE_FILE';
+                const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+                s['$1'] = $2;
+                s.lastUpdatedAt = new Date().toISOString();
+                fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json, datetime
+f = '$STATE_FILE'
+s = json.load(open(f))
+s['$1'] = $2
+s['lastUpdatedAt'] = datetime.datetime.utcnow().isoformat() + 'Z'
+json.dump(s, open(f, 'w'), indent=2)
+"
+            ;;
+    esac
+}
+
+json_get_phase_status() {
+    # $1 = phase name; echoes "pending" / "in-progress" / "done" / "failed" / "skipped"
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const s = JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8'));
+                console.log(s.phases['$1'] && s.phases['$1'].status || 'pending');
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json
+s = json.load(open('$STATE_FILE'))
+print(s['phases'].get('$1', {}).get('status', 'pending'))
+"
+            ;;
+    esac
+}
+
+json_push_error() {
+    # $1 = phase, $2 = message
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const fs = require('fs');
+                const f = '$STATE_FILE';
+                const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+                s.errors.push({ phase: '$1', message: \`$2\`, at: new Date().toISOString() });
+                s.lastUpdatedAt = new Date().toISOString();
+                fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json, datetime
+f = '$STATE_FILE'
+s = json.load(open(f))
+s['errors'].append({'phase': '$1', 'message': '''$2''', 'at': datetime.datetime.utcnow().isoformat() + 'Z'})
+s['lastUpdatedAt'] = datetime.datetime.utcnow().isoformat() + 'Z'
+json.dump(s, open(f, 'w'), indent=2)
+"
+            ;;
+    esac
+}
+
+mark_phase_done() {
+    # $1 = phase name
+    json_set_phase "$1" "status" '"done"'
+    json_set_phase "$1" "validatedAt" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+
+    # Append to completedPhases array
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const fs = require('fs');
+                const f = '$STATE_FILE';
+                const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+                if (!s.completedPhases.includes('$1')) s.completedPhases.push('$1');
+                fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json
+f = '$STATE_FILE'
+s = json.load(open(f))
+if '$1' not in s['completedPhases']:
+    s['completedPhases'].append('$1')
+json.dump(s, open(f, 'w'), indent=2)
+"
+            ;;
+    esac
+}
+
+mark_phase_failed() {
+    # $1 = phase, $2 = reason
+    json_set_phase "$1" "status" '"failed"'
+    json_push_error "$1" "$2"
+    err "$1 · $2"
+    err "Estado registrado en $STATE_FILE — ejecuta 'bash scripts/install.sh --resume' tras arreglar"
+    exit 1
+}
+
+# ── State machine init ──
+init_state() {
+    mkdir -p "$SKILLS_DIR"
+
+    if $FORCE_REINSTALL && [ -f "$STATE_FILE" ]; then
+        local backup="$STATE_FILE.$(date -u +%Y%m%dT%H%M%SZ).bak"
+        cp "$STATE_FILE" "$backup"
+        warn "State anterior respaldado en $backup"
+        rm -f "$STATE_FILE"
+    fi
+
+    if [ ! -f "$STATE_FILE" ]; then
+        if [ ! -f "$STATE_TEMPLATE" ]; then
+            err "Template $STATE_TEMPLATE no encontrado · repo corrupto, vuelve a clonar"
+            exit 1
+        fi
+        cp "$STATE_TEMPLATE" "$STATE_FILE"
+        json_set_root "repoPath" "\"$REPO_ROOT\""
+        json_set_root "startedAt" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+        ok "State machine inicializado: $STATE_FILE"
+    else
+        # Validar que sea JSON parseable
+        if ! json_validate "$STATE_FILE"; then
+            err "State file corrupto · ejecuta con --force-reinstall para reiniciar"
+            exit 1
+        fi
+        if $RESUME; then
+            ok "State machine cargado (modo --resume)"
+        else
+            skip "State machine ya existe (idempotente — usa --resume para continuar o --force-reinstall para reiniciar)"
+        fi
+    fi
+}
+
+# ── Phase 1: prereqs ──
+phase_prereqs() {
+    local current_status
+    current_status=$(json_get_phase_status "prereqs")
+    if [ "$current_status" = "done" ] && ! $FORCE_REINSTALL; then
+        skip "prereqs · ya validados (status=done)"
+        return 0
+    fi
+
+    title "[1/2] Validando prerequisitos"
+    json_set_phase "prereqs" "status" '"in-progress"'
+
+    local checks="{}"
+    local has_blocker=false
+
+    # OS detection
+    local os_type="unknown"
+    case "$(uname -s)" in
+        Darwin*)  os_type="macos" ;;
+        Linux*)   os_type="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) os_type="windows-bash" ;;
+    esac
+    ok "OS: $os_type ($(uname -m))"
+    if [ "$os_type" = "windows-bash" ]; then
+        warn "Windows + Git Bash detectado — WSL recomendado para mejor experiencia"
+    fi
+
+    # Git (required)
+    if ! command -v git >/dev/null 2>&1; then
+        mark_phase_failed "prereqs" "Git no encontrado · instalalo en https://git-scm.com"
+    fi
+    local git_ver
+    git_ver=$(git --version | awk '{print $3}')
+    ok "git: $git_ver"
+
+    # Node.js (required for Sinapsis hooks + JSON helpers)
+    if ! command -v node >/dev/null 2>&1; then
+        mark_phase_failed "prereqs" "Node.js no encontrado · es obligatorio (Sinapsis hooks lo requieren). Instala desde https://nodejs.org (≥18)"
+    fi
+    local node_ver
+    node_ver=$(node --version | sed 's/v//')
+    local node_major
+    node_major=$(echo "$node_ver" | cut -d. -f1)
+    if [ "$node_major" -lt 18 ]; then
+        mark_phase_failed "prereqs" "Node.js v$node_ver es viejo · se requiere ≥18"
+    fi
+    ok "node: v$node_ver"
+
+    # Python 3 (optional but recommended) — detección multi-plataforma
+    local python_cmd=""
+    for candidate in python3 "py -3" python python3.11 python3.12 python3.10; do
+        if command -v $(echo "$candidate" | awk '{print $1}') >/dev/null 2>&1; then
+            if $candidate --version 2>&1 | grep -qE "Python 3\.(9|10|11|12|13)"; then
+                python_cmd="$candidate"
+                break
+            fi
+        fi
+    done
+    # Casos especiales Windows (rutas absolutas comunes)
+    if [ -z "$python_cmd" ] && [ "$os_type" = "windows-bash" ]; then
+        for win_path in "/c/Python311/python.exe" "/c/Python312/python.exe" "/c/Python310/python.exe"; do
+            if [ -x "$win_path" ]; then
+                python_cmd="$win_path"
+                break
+            fi
+        done
+    fi
+    if [ -z "$python_cmd" ]; then
+        warn "Python 3 no encontrado · los hooks de observación de Sinapsis estarán deshabilitados"
+        warn "  Para habilitarlos: instala Python ≥3.9 desde https://python.org (NO Microsoft Store)"
+    else
+        local py_ver
+        py_ver=$($python_cmd --version 2>&1 | awk '{print $2}')
+        ok "python: $python_cmd ($py_ver)"
+    fi
+
+    # Claude Code detection (no bloquea, solo informa)
+    if command -v claude >/dev/null 2>&1; then
+        ok "Claude CLI en PATH"
+    elif [ -d "/Applications/Claude.app" ] || [ -d "$HOME/Applications/Claude.app" ]; then
+        ok "Claude Desktop (macOS app)"
     elif [ -n "$CLAUDE_DESKTOP" ] || [ -n "$CLAUDECODE" ]; then
-        ok "Variables de entorno Claude Code detectadas (ejecutándote desde Code)"
+        ok "Variables Claude Code detectadas"
     else
-        warn "Claude Code/Desktop no detectado en PATH · si lo tienes instalado, ignora este aviso"
+        warn "Claude Code/Desktop no detectado en PATH · si lo tienes instalado, ignora"
     fi
-fi
 
-# ── Step 3: Sinapsis vendor ──
-info "[3/7] Comprobando Sinapsis (engine de memoria)..."
+    # Persistir checks en el state
+    local checks_json
+    checks_json=$(cat <<EOF
+{
+  "os": "$os_type",
+  "git": "$git_ver",
+  "node": "v$node_ver",
+  "python": "${python_cmd:-not-found}"
+}
+EOF
+)
+    json_set_phase "prereqs" "checks" "$checks_json"
+    mark_phase_done "prereqs"
+}
 
-if [ ! -d "$SINAPSIS_VENDOR" ]; then
-    error "vendor/sinapsis/ no encontrado · el repo no está completo, vuelve a clonarlo"
-fi
+# ── Phase 2: sinapsis-engine ──
+validate_sinapsis_deep() {
+    # Validación PROFUNDA: no solo "existe el archivo", sino que sea funcional.
+    # Devuelve 0 si todo OK, 1 si falta algo. Imprime detalle.
+    local issues=0
 
-# Detectar si ya está instalada Sinapsis global
-SINAPSIS_INSTALLED=false
-if [ -f "$CLAUDE_HOME/skills/_catalog.json" ] || [ -f "$CLAUDE_HOME/skills/_operator-state.json" ]; then
-    SINAPSIS_INSTALLED=true
-    skip "Sinapsis: ya instalado en $CLAUDE_HOME/skills/ (no toco nada)"
-fi
+    [ -f "$SKILLS_DIR/_operator-state.json" ] || { warn "  validación: falta _operator-state.json"; issues=$((issues+1)); }
+    [ -f "$SKILLS_DIR/_catalog.json" ] || { warn "  validación: falta _catalog.json"; issues=$((issues+1)); }
 
-if ! $SINAPSIS_INSTALLED; then
+    if [ -f "$SKILLS_DIR/_operator-state.json" ]; then
+        if ! json_validate "$SKILLS_DIR/_operator-state.json"; then
+            warn "  validación: _operator-state.json no es JSON parseable"
+            issues=$((issues+1))
+        fi
+    fi
+    if [ -f "$SKILLS_DIR/_catalog.json" ]; then
+        if ! json_validate "$SKILLS_DIR/_catalog.json"; then
+            warn "  validación: _catalog.json no es JSON parseable"
+            issues=$((issues+1))
+        fi
+    fi
+
+    # Hooks ejecutables (los que Sinapsis instala)
+    for hook in _passive-activator.sh _instinct-activator.sh _session-learner.sh; do
+        if [ ! -f "$SKILLS_DIR/$hook" ]; then
+            warn "  validación: falta hook $hook"
+            issues=$((issues+1))
+        elif [ ! -x "$SKILLS_DIR/$hook" ]; then
+            warn "  validación: hook $hook no es ejecutable"
+            issues=$((issues+1))
+        fi
+    done
+
+    # ≥1 skill real instalada (SKILL.md, no archivos vacíos)
+    local skill_count
+    skill_count=$(find "$SKILLS_DIR" -maxdepth 3 -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$skill_count" -lt 1 ]; then
+        warn "  validación: no se encontró ninguna SKILL.md en $SKILLS_DIR"
+        issues=$((issues+1))
+    fi
+
+    # settings.json con sección hooks (señal de que Sinapsis registró sus hooks)
+    if [ -f "$CLAUDE_HOME/settings.json" ]; then
+        if ! grep -q '"hooks"' "$CLAUDE_HOME/settings.json"; then
+            warn "  validación: ~/.claude/settings.json existe pero no tiene sección 'hooks'"
+            issues=$((issues+1))
+        fi
+    else
+        warn "  validación: ~/.claude/settings.json no existe"
+        issues=$((issues+1))
+    fi
+
+    return $issues
+}
+
+phase_sinapsis_engine() {
+    local current_status
+    current_status=$(json_get_phase_status "sinapsis-engine")
+    if [ "$current_status" = "done" ] && ! $FORCE_REINSTALL; then
+        # Aún así re-validamos para detectar drift (alguien borró archivos manualmente)
+        if validate_sinapsis_deep >/dev/null 2>&1; then
+            skip "sinapsis-engine · ya instalado y validado (status=done)"
+            return 0
+        else
+            warn "sinapsis-engine · marcado done pero validación profunda falla · re-instalando"
+            json_set_phase "sinapsis-engine" "status" '"in-progress"'
+        fi
+    fi
+
+    title "[2/2] Instalando Sinapsis engine"
+    json_set_phase "sinapsis-engine" "status" '"in-progress"'
+
+    if $SKIP_SINAPSIS; then
+        warn "sinapsis-engine · saltado por --skip-sinapsis (solo debug)"
+        return 0
+    fi
+
+    if [ ! -d "$SINAPSIS_VENDOR" ]; then
+        mark_phase_failed "sinapsis-engine" "vendor/sinapsis/ no encontrado · repo incompleto, vuelve a clonar"
+    fi
     if [ ! -f "$SINAPSIS_VENDOR/install.sh" ]; then
-        error "vendor/sinapsis/install.sh no encontrado · vuelve a clonar el repo"
+        mark_phase_failed "sinapsis-engine" "vendor/sinapsis/install.sh no encontrado · vuelve a clonar el repo"
     fi
+
+    # Comprobar si ya está instalado de verdad (validación profunda, no solo existencia)
+    info "Comprobando si Sinapsis ya está operativo..."
+    if validate_sinapsis_deep >/dev/null 2>&1; then
+        ok "Sinapsis ya está operativo (validación profunda pasa)"
+        compute_and_store_checksum
+        mark_phase_done "sinapsis-engine"
+        return 0
+    fi
+
+    # No está, o está incompleto. Ejecutar el installer vendored.
     info "Ejecutando vendor/sinapsis/install.sh..."
+    local prev_dir="$PWD"
     cd "$SINAPSIS_VENDOR"
-    bash install.sh || error "Sinapsis install.sh falló · revisa el output anterior"
-    cd "$REPO_ROOT"
-    ok "Sinapsis instalado en $CLAUDE_HOME"
-fi
+    if ! bash install.sh; then
+        cd "$prev_dir"
+        mark_phase_failed "sinapsis-engine" "vendor/sinapsis/install.sh devolvió error · revisa el output anterior"
+    fi
+    cd "$prev_dir"
 
-# ── Step 4: OS layer · brand-context y context ──
-info "[4/7] Inicializando capa OS..."
+    # Validación POST-instalación (esto es lo que evita "instalaciones fantasma")
+    info "Validando instalación de Sinapsis (validación profunda)..."
+    if ! validate_sinapsis_deep; then
+        mark_phase_failed "sinapsis-engine" "Sinapsis se ejecutó pero la validación profunda falla · ver warnings arriba"
+    fi
 
-# Crear directorios necesarios (idempotente)
-mkdir -p "$REPO_ROOT/projects" "$REPO_ROOT/projects/briefs" "$REPO_ROOT/projects/welcome"
-mkdir -p "$REPO_ROOT/context"
-mkdir -p "$REPO_ROOT/brand-context/voice" "$REPO_ROOT/brand-context/positioning" "$REPO_ROOT/brand-context/icp" "$REPO_ROOT/brand-context/assets"
+    compute_and_store_checksum
+    mark_phase_done "sinapsis-engine"
+    ok "Sinapsis instalado y validado"
+}
 
-# .gitkeep para tracking
-for empty_dir in "projects/briefs" "projects/welcome" "brand-context/voice" "brand-context/positioning" "brand-context/icp" "brand-context/assets"; do
-    [ ! -f "$REPO_ROOT/$empty_dir/.gitkeep" ] && touch "$REPO_ROOT/$empty_dir/.gitkeep" || true
-done
-ok "Directorios proyecto creados/verificados"
+compute_and_store_checksum() {
+    # Hash de los archivos clave de Sinapsis para detectar drift posterior
+    local files_hash
+    if command -v shasum >/dev/null 2>&1; then
+        files_hash=$(find "$SKILLS_DIR" -maxdepth 1 -type f -name "_*.json" -o -name "_*.sh" 2>/dev/null | sort | xargs shasum -a 256 2>/dev/null | shasum -a 256 | awk '{print $1}')
+    elif command -v sha256sum >/dev/null 2>&1; then
+        files_hash=$(find "$SKILLS_DIR" -maxdepth 1 -type f -name "_*.json" -o -name "_*.sh" 2>/dev/null | sort | xargs sha256sum 2>/dev/null | sha256sum | awk '{print $1}')
+    else
+        files_hash="sha-tool-not-found"
+    fi
+    local validation_json
+    validation_json=$(cat <<EOF
+{
+  "operator_state_json_valid": true,
+  "catalog_json_valid": true,
+  "hooks_executable": true,
+  "skills_count": $(find "$SKILLS_DIR" -maxdepth 3 -name "SKILL.md" 2>/dev/null | wc -l | tr -d ' ')
+}
+EOF
+)
+    json_set_phase "sinapsis-engine" "validation" "$validation_json"
+    json_set_phase "sinapsis-engine" "checksum" "\"sha256:$files_hash\""
+}
 
-# Soul.md (estático — no lo crea el wizard, lo creamos aquí)
-if [ ! -f "$REPO_ROOT/context/soul.md" ]; then
-    cat > "$REPO_ROOT/context/soul.md" <<'EOF'
+# ── OS layer setup (no es una fase del state, son archivos del repo) ──
+setup_os_layer() {
+    title "Configurando capa OS del repo (archivos locales)"
+
+    mkdir -p "$REPO_ROOT/projects" "$REPO_ROOT/projects/briefs" "$REPO_ROOT/projects/welcome"
+    mkdir -p "$REPO_ROOT/context"
+    mkdir -p "$REPO_ROOT/brand-context/voice" "$REPO_ROOT/brand-context/positioning" "$REPO_ROOT/brand-context/icp" "$REPO_ROOT/brand-context/assets"
+
+    for empty_dir in "projects/briefs" "projects/welcome" "brand-context/voice" "brand-context/positioning" "brand-context/icp" "brand-context/assets"; do
+        [ ! -f "$REPO_ROOT/$empty_dir/.gitkeep" ] && touch "$REPO_ROOT/$empty_dir/.gitkeep" || true
+    done
+    ok "Directorios proyecto creados"
+
+    # Soul.md
+    if [ ! -f "$REPO_ROOT/context/soul.md" ]; then
+        cat > "$REPO_ROOT/context/soul.md" <<'EOF'
 # Soul · personalidad del agente
 
 > Cómo respondes al usuario. Esto es estático (cambia poco).
@@ -157,163 +546,250 @@ if [ ! -f "$REPO_ROOT/context/soul.md" ]; then
 ---
 *Última actualización: instalación inicial · este archivo lo modificas tú a tu gusto*
 EOF
-    ok "context/soul.md creado"
-else
-    skip "context/soul.md · ya existe"
-fi
+        ok "context/soul.md creado"
+    fi
 
-# Decisions log (con header canónico)
-if [ ! -f "$REPO_ROOT/context/decisions-log.md" ]; then
-    cat > "$REPO_ROOT/context/decisions-log.md" <<'EOF'
+    if [ ! -f "$REPO_ROOT/context/decisions-log.md" ]; then
+        cat > "$REPO_ROOT/context/decisions-log.md" <<'EOF'
 # Decisions log
 
 Diario append-only de decisiones del operador.
 Patrón inspirado en [claude-code-second-brain](https://github.com/Luispitik/claude-code-second-brain) de Luis Pitik.
 
-> Esta skill (`decisions-log`) se invoca automáticamente cuando
-> tomas una decisión estratégica. También puedes invocarla
-> manualmente: "registra esta decisión".
-
 ---
 EOF
-    ok "context/decisions-log.md creado (header canónico)"
-else
-    skip "context/decisions-log.md · ya existe"
-fi
+        ok "context/decisions-log.md creado"
+    fi
 
-# Learnings (vacío, lo llenan las skills)
-if [ ! -f "$REPO_ROOT/context/learnings.md" ]; then
-    cat > "$REPO_ROOT/context/learnings.md" <<'EOF'
+    if [ ! -f "$REPO_ROOT/context/learnings.md" ]; then
+        cat > "$REPO_ROOT/context/learnings.md" <<'EOF'
 # Learnings
 
 Feedback consolidado de skills, append-only.
-Cada sección corresponde a una skill que registró algo aprendido.
-
-> Lo mantiene la skill `meta-wrap-up` al cerrar sesión.
 
 ---
 EOF
-    ok "context/learnings.md creado"
-else
-    skip "context/learnings.md · ya existe"
-fi
-
-# Los 5 archivos sectorizados (me, work, team, priorities, goals) los crea el WIZARD,
-# no este script. Aquí solo dejamos un README explicativo en context/.
-if [ ! -f "$REPO_ROOT/context/README.md" ]; then
-    cat > "$REPO_ROOT/context/README.md" <<'EOF'
-# context/
-
-Contexto sectorizado del operador (patrón inspirado en [second-brain](https://github.com/Luispitik/claude-code-second-brain)).
-
-Los archivos siguientes los crea automáticamente la skill `meta-onboarding-wizard` la primera vez que abres Claude Code en este repo:
-
-- `me.md` — identidad personal (nombre, ubicación, descripción profesional)
-- `work.md` — negocio, servicios, revenue, stack
-- `team.md` — equipo (puede estar vacío si trabajas solo)
-- `current-priorities.md` — foco del mes, cuello de botella
-- `goals.md` — objetivos 12 meses
-
-Y los siguientes ya existen y se mantienen automáticamente:
-
-- `soul.md` — personalidad del agente (estática)
-- `decisions-log.md` — diario append-only de decisiones (skill `decisions-log`)
-- `learnings.md` — feedback de skills (skill `meta-wrap-up`)
-
-Si quieres editarlos a mano: adelante, el wizard solo los crea la primera vez.
-EOF
-    ok "context/README.md creado"
-fi
-
-# ── Step 5: Brand context README ──
-info "[5/7] Inicializando brand-context/..."
-
-if [ ! -f "$REPO_ROOT/brand-context/README.md" ]; then
-    cat > "$REPO_ROOT/brand-context/README.md" <<'EOF'
-# brand-context/
-
-Tu marca: voz, posicionamiento, ICP, assets.
-
-Los archivos los generan estas skills (no se llenan en la instalación):
-
-- `marketing-brand-voice` → `voice/voice-profile.md`, `voice/samples.md`, `voice/register-{a,b,c}-*.md`
-- `marketing-positioning` → `positioning/positioning.md`
-- `marketing-icp` → `icp/icp.md`
-- `marketing-brand-voice` (con Firecrawl) → `assets/` (logos, colores, fuentes auto-extraídos)
-
-Los puedes generar tras el onboarding ejecutando `/start-here` y eligiendo "configurar brand voice".
-EOF
-    ok "brand-context/README.md creado"
-else
-    skip "brand-context/README.md · ya existe"
-fi
-
-# ── Step 6: .env from .env.example ──
-info "[6/7] Verificando .env..."
-
-if [ ! -f "$REPO_ROOT/.env" ]; then
-    if [ -f "$REPO_ROOT/.env.example" ]; then
-        cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
-        ok ".env creado desde .env.example (rellena las claves cuando las tengas)"
-    else
-        warn ".env.example no encontrado · skill skipping"
+        ok "context/learnings.md creado"
     fi
-else
-    skip ".env · ya existe (no se sobrescribe)"
-fi
 
-# ── Step 7: Vendored skills opcionales (cognito) → NO se instalan por defecto ──
-info "[7/8] Skills opcionales..."
+    if [ ! -f "$REPO_ROOT/.env" ] && [ -f "$REPO_ROOT/.env.example" ]; then
+        cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
+        ok ".env creado desde .env.example"
+    fi
 
-# Desde v0.5.0 cognito ya NO se copia automáticamente.
-# Vive en .claude/skills/_meta/_optional/cognito y se activa con:
-#   /install-skill cognito
-# Razón: para alguien que abre el OS por primera vez es ruido conceptual.
-# Recomendado activarla tras la primera semana de uso, cuando ya conoce los básicos.
+    # Instalar hook _install-gate.sh en SKILLS_DIR (es el gate de SessionStart)
+    if [ -f "$SCRIPT_DIR/_install-gate.sh" ]; then
+        cp "$SCRIPT_DIR/_install-gate.sh" "$SKILLS_DIR/_install-gate.sh"
+        chmod +x "$SKILLS_DIR/_install-gate.sh"
+        ok "_install-gate.sh instalado en $SKILLS_DIR (hook SessionStart)"
+        register_session_start_hook
+    else
+        warn "_install-gate.sh no encontrado en scripts/ · el gate de bloqueo no funcionará"
+    fi
+}
 
-if [ -d "$REPO_ROOT/.claude/skills/_meta/_optional/cognito" ]; then
-    skip "cognito · disponible en _optional/ — activar con /install-skill cognito cuando quieras"
-fi
+# Registra el hook SessionStart en ~/.claude/settings.json sin pisar lo que Sinapsis u
+# otros plugins hayan registrado. Idempotente: si ya está, no lo duplica.
+register_session_start_hook() {
+    local settings="$CLAUDE_HOME/settings.json"
+    if [ ! -f "$settings" ]; then
+        warn "  ~/.claude/settings.json no existe todavía · Sinapsis debería haberlo creado"
+        return 0
+    fi
 
-# ── Step 8: Final verification ──
-info "[8/8] Verificación final..."
+    node <<NODE_EOF
+const fs = require('fs');
+const settingsPath = '$settings';
+try {
+  const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  if (!s.hooks) s.hooks = {};
+  if (!Array.isArray(s.hooks.SessionStart)) s.hooks.SessionStart = [];
 
-ISSUES=0
-[ ! -d "$CLAUDE_HOME/skills" ] && ISSUES=$((ISSUES+1)) && warn "verify: $CLAUDE_HOME/skills no existe"
-[ ! -f "$REPO_ROOT/CLAUDE.md" ] && ISSUES=$((ISSUES+1)) && error "verify: CLAUDE.md no existe en repo (corrupto)"
-[ ! -f "$REPO_ROOT/.claude/settings.json" ] && ISSUES=$((ISSUES+1)) && warn "verify: .claude/settings.json no existe"
-[ ! -d "$REPO_ROOT/.claude/skills/_meta" ] && ISSUES=$((ISSUES+1)) && warn "verify: .claude/skills/_meta no existe"
+  // Detectar si ya está registrado el install-gate (idempotencia)
+  const alreadyRegistered = s.hooks.SessionStart.some(group =>
+    Array.isArray(group.hooks) && group.hooks.some(h =>
+      typeof h.command === 'string' && h.command.includes('_install-gate.sh')
+    )
+  );
 
-if [ $ISSUES -eq 0 ]; then
-    ok "Verificación final: todo en orden"
-else
-    warn "Verificación final: $ISSUES avisos · ejecuta /doctor en Claude Code para diagnóstico completo"
-fi
+  if (alreadyRegistered) {
+    console.log('[SKIP] SessionStart hook ya registrado en settings.json');
+    process.exit(0);
+  }
 
-# ── Done ──
-echo ""
-echo "============================================================"
-echo "  ✓ iAmasters OS instalado en: $REPO_ROOT"
-echo "============================================================"
-echo ""
-echo "  Siguiente paso:"
-echo "    1. Asegúrate de tener Claude Desktop con plan Pro o Max"
-echo "    2. Abre la tab Code en Claude Desktop"
-echo "    3. Usa 'Open folder' y selecciona: $REPO_ROOT"
-echo "    4. La primera vez se ejecutará el onboarding wizard automáticamente"
-echo ""
-echo "  Comandos útiles dentro de Claude Code:"
-echo "    /aprende      — Tour de 5 días (alumnos desde cero)"
-echo "    /welcome      — Genera tu primer entregable (5 min)"
-echo "    /doctor       — Diagnóstico del OS"
-echo "    /start-here   — Ritual de inicio diario"
-echo "    /wrap-up      — Cierre de sesión + commit"
-echo ""
-echo "  Plugins oficiales Anthropic (recomendado activar):"
-echo "    /plugin install anthropic-skills"
-echo "    Te da: docx, xlsx, pdf, pptx (manejo de archivos office)"
-echo ""
-echo "  Si vienes del prompt URL conversacional:"
-echo "    Claude Code ya está procesando · sigue sus instrucciones"
-echo ""
-exit 0
+  s.hooks.SessionStart.push({
+    hooks: [
+      {
+        _comment: 'iAmasters OS install gate: bloquea sesiones si _install-state.json no completo',
+        type: 'command',
+        command: 'bash ~/.claude/skills/_install-gate.sh',
+        timeout: 5
+      }
+    ]
+  });
+
+  fs.writeFileSync(settingsPath, JSON.stringify(s, null, 2));
+  console.log('[OK] SessionStart hook registrado en ~/.claude/settings.json');
+} catch (e) {
+  console.error('[WARN] No pude modificar settings.json: ' + e.message);
+  process.exit(0);
+}
+NODE_EOF
+}
+
+# ── Migration helper: detecta instalación v0.5.x existente y rellena state retroactivamente ──
+migrate_v05_existing() {
+    # Si los archivos de context/ ya existen y tienen contenido real, marca context-files done.
+    # Útil para usuarios que actualizan de v0.5.x a v0.6 sin tener que rehacer el onboarding.
+
+    local migrated_files="[]"
+    for f in "context/me.md" "context/work.md" "context/current-priorities.md" "context/goals.md"; do
+        if [ -f "$REPO_ROOT/$f" ]; then
+            local size
+            size=$(wc -c < "$REPO_ROOT/$f" | tr -d ' ')
+            if [ "$size" -gt 100 ]; then
+                case "$JSON_RUNTIME" in
+                    node)
+                        migrated_files=$(node -e "
+                            const arr = $migrated_files;
+                            arr.push('$f');
+                            process.stdout.write(JSON.stringify(arr));
+                        ")
+                        ;;
+                    python3|python)
+                        migrated_files=$("$JSON_RUNTIME" -c "
+import json
+arr = $migrated_files
+arr.append('$f')
+print(json.dumps(arr))
+")
+                        ;;
+                esac
+            fi
+        fi
+    done
+
+    # Si tenemos los 4 archivos → marcamos context-files done
+    local count
+    case "$JSON_RUNTIME" in
+        node)    count=$(node -e "process.stdout.write(String($migrated_files.length))") ;;
+        python3|python) count=$("$JSON_RUNTIME" -c "print(len($migrated_files))") ;;
+    esac
+
+    if [ "$count" = "4" ]; then
+        local current_cf_status
+        current_cf_status=$(json_get_phase_status "context-files")
+        if [ "$current_cf_status" != "done" ]; then
+            json_set_phase "context-files" "filesCreated" "$migrated_files"
+            json_set_phase "context-files" "filesPending" "[]"
+            mark_phase_done "context-files"
+            ok "Migrado v0.5→v0.6: context-files marcado como done (4 archivos preexistentes con contenido real)"
+        fi
+    fi
+
+    # Si _operator-state.json tiene needsOnboarding: false, marcamos operator-state done
+    if [ -f "$SKILLS_DIR/_operator-state.json" ]; then
+        local needs_onboarding
+        case "$JSON_RUNTIME" in
+            node)
+                needs_onboarding=$(node -e "
+                    try {
+                        const s = JSON.parse(require('fs').readFileSync('$SKILLS_DIR/_operator-state.json','utf8'));
+                        process.stdout.write(String(s.needsOnboarding === false));
+                    } catch (e) { process.stdout.write('false'); }
+                ")
+                ;;
+            python3|python)
+                needs_onboarding=$("$JSON_RUNTIME" -c "
+import json
+try:
+    s = json.load(open('$SKILLS_DIR/_operator-state.json'))
+    print(str(s.get('needsOnboarding') == False).lower())
+except: print('false')
+")
+                ;;
+        esac
+        if [ "$needs_onboarding" = "true" ]; then
+            local current_os_status
+            current_os_status=$(json_get_phase_status "operator-state")
+            if [ "$current_os_status" != "done" ]; then
+                mark_phase_done "operator-state"
+                ok "Migrado v0.5→v0.6: operator-state marcado como done (needsOnboarding: false detectado)"
+            fi
+        fi
+    fi
+
+    # Si projects/welcome/ tiene algo, asumimos welcome-quick-win se hizo en una sesión anterior
+    if [ -d "$REPO_ROOT/projects/welcome" ] && [ -n "$(find "$REPO_ROOT/projects/welcome" -type f ! -name '.gitkeep' 2>/dev/null | head -1)" ]; then
+        local current_wc_status
+        current_wc_status=$(json_get_phase_status "welcome-completed")
+        if [ "$current_wc_status" != "done" ]; then
+            mark_phase_done "welcome-completed"
+            ok "Migrado v0.5→v0.6: welcome-completed marcado como done (deliverable preexistente)"
+        fi
+    fi
+}
+
+# ── Main flow ──
+main() {
+    if ! detect_json_runtime; then
+        err "Necesito node, python3 o python (Python 3) para gestionar el state machine"
+        err "Instala uno: https://nodejs.org o https://python.org"
+        exit 1
+    fi
+    info "JSON runtime: $JSON_RUNTIME"
+
+    init_state
+
+    phase_prereqs
+    phase_sinapsis_engine
+    setup_os_layer
+
+    # Migración automática para usuarios v0.5.x con instalación previa
+    migrate_v05_existing
+
+    # Las fases 3-5 (context-files, operator-state, welcome-completed) las hace
+    # el wizard DENTRO de Claude Code, no este script. El gate las verificará.
+
+    echo ""
+    echo "============================================================"
+    echo "  ✓ Fases técnicas completadas (prereqs + sinapsis-engine + capa OS)"
+    echo "============================================================"
+    echo ""
+    echo "  Estado actual:"
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+const s = JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8'));
+for (const [k, v] of Object.entries(s.phases)) {
+  const icon = v.status === 'done' ? '✅' : v.status === 'failed' ? '❌' : v.status === 'in-progress' ? '🟡' : '⏳';
+  console.log('   ' + icon + ' ' + k + ' · ' + v.status);
+}
+" 2>/dev/null || true
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json
+s = json.load(open('$STATE_FILE'))
+icons = {'done':'OK','failed':'ERR','in-progress':'WIP','pending':'...','skipped':'SKIP'}
+for k, v in s['phases'].items():
+    print('   [' + icons.get(v.get('status','pending'),'?') + '] ' + k + ' . ' + v.get('status','pending'))
+" 2>/dev/null || true
+            ;;
+    esac
+    echo ""
+    echo "  Siguiente paso:"
+    echo "    1. Abre Claude Code en este repo: $REPO_ROOT"
+    echo "    2. El hook SessionStart detectará que faltan fases 3-5 (onboarding)"
+    echo "    3. Sigue las instrucciones del agente — ejecuta /install si te lo pide"
+    echo ""
+    echo "  Si algo falla, ejecuta:    bash scripts/install.sh --resume"
+    echo "  Para reinstalar desde 0:   bash scripts/install.sh --force-reinstall"
+    echo ""
+    echo "  State machine en:   $STATE_FILE"
+    echo "  Inspecciónalo con:  cat $STATE_FILE"
+    echo ""
+    exit 0
+}
+
+main "$@"
