@@ -15,6 +15,48 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## v0.5.2 — Brand Voice v2.0 con doble ruta (2026-05-15)
+
+> **Visión**: la skill `marketing-brand-voice` capturaba bien la voz si el operador tenía presencia online (URLs scrapeables, posts representativos), pero se quedaba corta cuando alguien no tenía archivo digital o no quería compartir privados. Esta release integra la mecánica de **Brand Voice Pro** (skill standalone publicada como bonus del lanzamiento iAmasters Academy 17-may en `iamasters-academy/brand-voice-pro`), manteniendo toda la integración con el ecosistema OS.
+
+### Changed — `marketing-brand-voice` reescrita a v2.0
+
+- **De preguntas teóricas a captura de voz auténtica**. La v1 hacía 6 preguntas sobre el tono (que el operador podía contestar de forma idealizada). La v2 incorpora **doble ruta por registro**: artefactos reales o **15 simulaciones reales** (5 por cada registro A/B/C) que sacan la voz natural sin que el operador sepa que está "siendo medido".
+- **Detección de ruta global** al inicio (Paso 2). Pregunta clave: *"¿Eres una persona activa en redes / escribes mucho online?"* → asigna ruta artefactos (a), simulación (b) o híbrida (c) por registro.
+- **Validación intermedia** antes de generar los archivos finales (Paso 7). Muestra al operador el análisis detectado por registro + spectrum 0-10 y pide corrección antes de cerrar.
+- **Edge case nuevo**: operador idealiza respuestas en simulación. Si en Paso 7 el operador dice "esto no soy yo", reformular preguntas pidiendo respuestas más auténticas ("respóndeme como lo harías un sábado a las 23h, no como te gustaría sonar").
+
+### Added — 3 archivos nuevos al output
+
+Output total: 5 → **8 archivos** en `brand-context/voice/`:
+
+- **`audit-prompt.md`** *(nuevo)* — prompt sistema reutilizable para auditar cualquier texto y verificar si está en la voz del operador. Devuelve puntuación por dimensión (tono, estructura, vocabulario, spectrum 0-10) + sustituciones concretas para anti-voz detectada. Pegable como instrucción de sistema en Claude Project, ChatGPT GEM o cualquier LLM.
+- **`vocabulary.md`** *(nuevo)* — archivo independiente con: palabras-firma por registro · anti-corporate · anti-hype · anti-genérico de IA · muletillas auténticas (las que el operador repite naturalmente y NO debe eliminar porque son parte de su marca).
+- **`installation.md`** *(nuevo)* — guía multi-sistema para instalar el voice profile en Claude Desktop / Claude Project / ChatGPT GEM / cualquier LLM externo. Permite que el operador use su voz fuera del OS también.
+
+### Kept — toda la integración OS y la calidad cuantitativa de la v1
+
+Se mantiene sin cambios:
+
+- Firecrawl auto-scraping de URLs (web, LinkedIn, YouTube, X) via `tool-firecrawl-scraper`
+- Spectrum 0-10 en 5 dimensiones: formality, directness, humor, authority, warmth
+- 6 preguntas calibradoras (anti-modelo, modelo aspiracional, frases-firma, jerga propia, vocabulario prohibido, tono dominante)
+- Integración con `meta-onboarding-wizard` (invocación tras identidad)
+- Update de `operator-state.json` con flag `brandVoiceConfigured: true`
+- Append a `context/learnings.md` con la entrada del día
+- Edge cases existentes: idioma no castellano, voice multi-canal, URLs no scrapeables, sin presencia online
+
+### Relación con Brand Voice Pro (repo standalone)
+
+El repo privado [`iamasters-academy/brand-voice-pro`](https://github.com/iamasters-academy/brand-voice-pro) **se mantiene** como producto independiente para:
+
+- Bonus de la lista prioritaria del lanzamiento iAmasters Academy del 17-may-2026 (ventana 18:00-19:00h)
+- Operadores que aún no usan iAmasters OS y quieren la skill desde ChatGPT GEM o Claude Project sueltos
+
+La v2 dentro del OS añade encima de Brand Voice Pro la **integración con el ecosistema** (Firecrawl + spectrum + onboarding-wizard + learnings + multi-cliente). Quien usa el OS tiene la versión completa.
+
+---
+
 ## v0.5.1 — Onboarding profundo y conversacional (2026-05-13)
 
 > **Visión**: el wizard inicial era un formulario disfrazado de conversación (14 preguntas predefinidas, respuestas planas). Esta release lo convierte en una entrevista real adaptativa, con profundización dinámica según las respuestas. Y añade una segunda fase opcional (`meta-deep-dive`) que profundiza 22-25 dimensiones residuales en ~25 min.
