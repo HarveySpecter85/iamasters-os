@@ -30,8 +30,8 @@ keywords:
   - iamasters-academy
 license: MIT
 license-url: "https://github.com/iamasters-academy/iamasters-os/blob/main/LICENSE"
-version: "0.8.0"
-date-released: "2026-06-02"
+version: "0.8.1"
+date-released: "2026-06-03"
 preferred-citation:
   type: software
   authors:

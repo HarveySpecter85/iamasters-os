@@ -130,9 +130,9 @@ Lo que aporta este repo encima de Sinapsis:
 
 ## Skills registry (v0.8.0)
 
-Capa 1 = 25 skills core + 1 opcional.
+Capa 1 = 26 skills core + 1 opcional.
 
-### `_meta/` — sistema (10)
+### `_meta/` — sistema (11)
 
 | Skill | Descripción corta |
 |---|---|
@@ -146,6 +146,7 @@ Capa 1 = 25 skills core + 1 opcional.
 | `decisions-log` | Diario append-only de decisiones |
 | `health-check` | Diagnóstico del OS con **validación profunda y detección de drift** (v0.6) |
 | `find-skills` | Descoverabilidad por intent |
+| `recuerda` | **Recall de memoria local** (SQLite+FTS5) con fuente citada — base para todos, semántico opt-in (v0.8.1) |
 
 ### `_meta/_optional/` (1)
 
@@ -201,7 +202,7 @@ Capa 1 = 25 skills core + 1 opcional.
 
 ### Slash commands
 
-`/install` · `/install-status` · `/start-here` · `/wrap-up` · `/doctor` · `/add-client` · `/install-skill` · `/install-mcp` · `/aprende` · `/deep-dive`
+`/install` · `/install-status` · `/start-here` · `/wrap-up` · `/doctor` · `/add-client` · `/install-skill` · `/install-mcp` · `/aprende` · `/deep-dive` · `/recuerda`
 
 Los dos primeros (`/install`, `/install-status`) son nuevos en v0.6 y son la **única vía oficial** para gestionar la instalación desde dentro de Claude Code.
 

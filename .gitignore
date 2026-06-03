@@ -22,6 +22,9 @@ desktop.ini
 
 # Operator data — privado por usuario, no se commitea
 context/daily-memory/
+context/.memory-index/
+# corpus.yaml lleva rutas personales del operador; el genérico es corpus.example.yaml
+scripts/memory-index/corpus.yaml
 context/user.md
 context/me.md
 context/work.md

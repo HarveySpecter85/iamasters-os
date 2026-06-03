@@ -9,14 +9,36 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### En curso — Memory Upgrade (Store / Inject / Recall · benchmark vs Agentic OS Phase 2)
-- **v0.8.1 · P1 recall semántico** — pgvector sobre Supabase self-hosted + embeddings locales (CPU, coste cero) + búsqueda híbrida (vector + full-text español) + skill `/recuerda` con respuestas citadas y "no lo tengo" sin inventar. Ejecución planificada vía Codex (`/gpt`), review del maintainer.
+- **cron auto-sync** del índice de memoria (nightly, incremental) — pendiente de conectar (Opus).
 - **v0.8.2 · P2 captura de contenido** — resumen legible por sesión que engorda el corpus indexado por P1.
-- **v0.9.0 · P4 Team OS** — memoria/permisos compartidos para equipo (3-tier Notion+Supabase+GitHub, RLS por persona/cliente). Decisión de negocio pendiente.
+- **v0.9.0 · P4 Team OS** — memoria/permisos compartidos para equipo. Módulo AVANZADO opcional (no core), decisión de negocio pendiente.
 
 ### Backlog
 - skills nativas en español adicionales (proposal-writer, youtube-transcript, linkedin-posts) con voice profile del operador
 - dashboard del OS (pendiente decidir si se integra con dashboard Sinapsis)
 - v1.0.0: release pública estable + vídeos Loom + landing en iamastersacademy.com/os
+
+---
+
+## v0.8.1 — Memory Upgrade · P1: recall local (SQLite + FTS5) + CodeGraph en el catálogo (2026-06-03)
+
+> **Por qué esta release**: el recall se construyó **LOCAL-FIRST** (SQLite + FTS5, cero servicios externos) en vez de Supabase/pgvector. Motivo: este repo lo instala **gente no técnica** de la comunidad — la sencillez de instalación manda sobre la potencia máxima. Búsqueda por keyword español para todos; semántica (embeddings) **opt-in** para quien ya tenga histórico que lo justifique. Patrón inspirado en CodeGraph (índice local en un `.db`, instalable de un comando).
+
+### Added
+- **Recall de memoria local** (`scripts/memory-index/`): índice SQLite + FTS5 sobre el corpus markdown del operador. `ingest.py` (chunking por encabezados, scrub de secretos, incremental por SHA1, ranking BM25), `schema.sql` (FTS5 external-content + triggers de sync), `corpus.yaml`. Capa semántica **opt-in** en `semantic.py` (`sqlite-vec` + `multilingual-e5-small`) tras `--semantic`. 100% local, sin API keys, sin connection strings.
+- **Skill `/recuerda`** (`_meta/recuerda`) — recall con Tier 0 (contexto cargado) → FTS5; responde **con fuente citada** o **"no lo tengo registrado"** sin inventar (coherente con la regla no-inventar-datos).
+- **CodeGraph** documentado en `docs/mcps-curated.md` como MCP **add-on opcional** (grafo de código local, 100% local, MIT) para usuarios que programan. Validado en un repo real antes de recomendarlo.
+
+### Changed
+- `CLAUDE.md` registry: +`recuerda` en `_meta`, +`/recuerda` en slash commands, conteo a 26 skills core.
+
+### Review del maintainer (Opus)
+- Eliminado un atajo de query **hardcodeado** con términos de iAmasters (`cpl→leadgen/ret/...`) que Codex había metido: rompía la promesa de repo genérico (misma clase de fuga limpiada en v0.7.1). Ahora `FTS_EXPANSIONS` está vacío y es configurable por el operador.
+- `--smoke-query` renombrado a `--query` (con alias) para uso de producción.
+
+### Validado (end-to-end, local)
+- Ingest: **108 archivos → 789 chunks en 0,15 s**, SQLite local 1,5 MB.
+- Las 3 preguntas de control (CPL de Miguel · archivado del Cockpit · pendientes plataforma miembros) devuelven la fuente correcta en top-5. La negativa (dato inexistente: cobro anual FIBA) no produce falsos positivos.
 
 ---
 
