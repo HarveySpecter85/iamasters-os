@@ -15,6 +15,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Ajustada la detección de Python en `scripts/install.sh` para separar candidatos POSIX de `py -3` en Windows/Git Bash.
 
 ### Added
+- `docs/automatizaciones.md` — guía de loops programados y rutinas para hacer que el OS trabaje solo.
+- CI de validación anti-drift en `.github/workflows/validate.yml` con checks locales reutilizables.
 - Nueva guía `docs/skill-creation-guide.md` con patrón real de skills, frontmatter, validación y ejemplo mínimo.
 - Nueva plantilla `brand-context/glossary-template.json` para correcciones STT de `tool-zoom-summary`.
 - `automation-loop-engine` (Loop Engineering) como skill core + carpeta `loops/` + comandos `/loops` y `/evalua-loop` + integración con `health-check`, `/recuerda` y `working-memory`.
