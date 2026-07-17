@@ -222,10 +222,41 @@ json.dump(s, open(f, 'w'), indent=2)
     esac
 }
 
+clear_phase_errors() {
+    # $1 = phase — elimina del array global s.errors las entradas de esa fase.
+    # Sin esto, un error de un intento previo persiste para siempre y sigue
+    # apareciendo en /install-status aunque el reintento acabe en 'done'.
+    case "$JSON_RUNTIME" in
+        node)
+            node -e "
+                const fs = require('fs');
+                const f = '$WIN_STATE_FILE';
+                const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+                s.errors = (s.errors || []).filter(e => e.phase !== '$1');
+                s.lastUpdatedAt = new Date().toISOString();
+                fs.writeFileSync(f, JSON.stringify(s, null, 2));
+            "
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" -c "
+import json, datetime
+f = '$WIN_STATE_FILE'
+s = json.load(open(f))
+s['errors'] = [e for e in s.get('errors', []) if e.get('phase') != '$1']
+s['lastUpdatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+json.dump(s, open(f, 'w'), indent=2)
+"
+            ;;
+    esac
+}
+
 mark_phase_done() {
     # $1 = phase name
     json_set_phase "$1" "status" '"done"'
     json_set_phase "$1" "validatedAt" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
+    # Purga los errores de esta fase: si un intento previo falló y ahora pasa,
+    # el error viejo NO debe seguir mostrándose (era un fantasma que asustaba).
+    clear_phase_errors "$1"
 
     # Append to completedPhases array
     case "$JSON_RUNTIME" in
@@ -423,8 +454,10 @@ validate_sinapsis_deep() {
         fi
     fi
 
-    # Hooks ejecutables (los que Sinapsis instala)
-    for hook in _passive-activator.sh _instinct-activator.sh _session-learner.sh; do
+    # Hooks ejecutables — los 7 que Sinapsis instala (antes solo se validaban 3,
+    # así que una instalación con hooks a medias pasaba como buena).
+    for hook in _passive-activator.sh _instinct-activator.sh _session-learner.sh \
+                _project-context.sh _eod-gather.sh _dream.sh _precompact-guard.sh; do
         if [ ! -f "$SKILLS_DIR/$hook" ]; then
             warn "  validación: falta hook $hook"
             issues=$((issues+1))
@@ -442,15 +475,25 @@ validate_sinapsis_deep() {
         issues=$((issues+1))
     fi
 
-    # settings.json con sección hooks (señal de que Sinapsis registró sus hooks)
-    if [ -f "$CLAUDE_HOME/settings.json" ]; then
-        if ! grep -q '"hooks"' "$CLAUDE_HOME/settings.json"; then
-            warn "  validación: ~/.claude/settings.json existe pero no tiene sección 'hooks'"
-            issues=$((issues+1))
-        fi
-    else
+    # settings.json debe existir Y tener los hooks de Sinapsis REALMENTE cableados.
+    # No basta con que aparezca la palabra "hooks": eso daba falso OK cuando el
+    # usuario ya tenía settings.json con hooks de otra cosa y los de Sinapsis
+    # nunca se registraron → motor de aprendizaje muerto en silencio.
+    if [ ! -f "$CLAUDE_HOME/settings.json" ]; then
         warn "  validación: ~/.claude/settings.json no existe"
         issues=$((issues+1))
+    elif ! json_validate "$CLAUDE_HOME/settings.json"; then
+        warn "  validación: ~/.claude/settings.json no es JSON parseable"
+        issues=$((issues+1))
+    else
+        local missing_wired=0 h
+        for h in _passive-activator.sh _instinct-activator.sh _session-learner.sh; do
+            grep -q "$h" "$CLAUDE_HOME/settings.json" || missing_wired=$((missing_wired+1))
+        done
+        if [ "$missing_wired" -gt 0 ]; then
+            warn "  validación: settings.json no cablea los hooks de Sinapsis ($missing_wired/3 activadores ausentes) · ejecuta el instalador para arreglarlo"
+            issues=$((issues+1))
+        fi
     fi
 
     return $issues
@@ -477,6 +520,93 @@ record_sinapsis_validation() {
         "{\"operator_state_json_valid\": $op_valid, \"catalog_json_valid\": $cat_valid, \"hooks_executable\": $hooks_ok, \"skills_count\": ${skill_count:-0}}"
 }
 
+ensure_sinapsis_hooks() {
+    # FIX capa OS: el instalador vendored de Sinapsis NO registra sus hooks si
+    # ~/.claude/settings.json YA existe (solo imprime "merge manually"). Como casi
+    # todos los usuarios ya tienen settings.json, sus hooks nunca se cableaban y el
+    # motor de aprendizaje quedaba inerte (y en el peor caso la validación abortaba
+    # toda la instalación). Aquí hacemos un DEEP-MERGE IDEMPOTENTE de los hooks de
+    # la plantilla de Sinapsis dentro del settings.json del usuario, preservando
+    # cualquier hook/permiso/config previo. Re-ejecutar = no-op.
+    local template="$SINAPSIS_VENDOR/core/settings.template.json"
+    local settings="$CLAUDE_HOME/settings.json"
+    if [ ! -f "$template" ]; then
+        warn "  no encontrado $template · no se pueden cablear los hooks de Sinapsis"
+        return 1
+    fi
+    mkdir -p "$CLAUDE_HOME"
+
+    local _tpl _set
+    _tpl="$(_win_path "$template")"
+    _set="$(_win_path "$settings")"
+
+    case "$JSON_RUNTIME" in
+        node)
+            node -e '
+const fs = require("fs"), path = require("path");
+const tplPath = process.argv[1], setPath = process.argv[2];
+function strip(o){ if(Array.isArray(o)) return o.map(strip); if(o && typeof o==="object"){ const r={}; for(const [k,v] of Object.entries(o)){ if(k.startsWith("_")) continue; r[k]=strip(v);} return r;} return o; }
+const tpl = strip(JSON.parse(fs.readFileSync(tplPath, "utf8")));
+let cur = {};
+if (fs.existsSync(setPath)) { try { cur = JSON.parse(fs.readFileSync(setPath, "utf8")); } catch(e){ console.error("settings.json existe pero no es JSON parseable"); process.exit(3); } }
+cur.hooks = (cur.hooks && typeof cur.hooks === "object") ? cur.hooks : {};
+const cmdOf = h => (h && typeof h === "object" && h.command) ? h.command : JSON.stringify(h);
+for (const [event, groups] of Object.entries(tpl.hooks || {})) {
+  if (!Array.isArray(cur.hooks[event])) cur.hooks[event] = [];
+  for (const g of groups) {
+    let dst = cur.hooks[event].find(x => (x.matcher || "") === (g.matcher || ""));
+    if (!dst) { cur.hooks[event].push(JSON.parse(JSON.stringify(g))); continue; }
+    if (!Array.isArray(dst.hooks)) dst.hooks = [];
+    const seen = new Set(dst.hooks.map(cmdOf));
+    for (const hk of (g.hooks || [])) { if (!seen.has(cmdOf(hk))) { dst.hooks.push(hk); seen.add(cmdOf(hk)); } }
+  }
+}
+fs.mkdirSync(path.dirname(setPath), { recursive: true });
+fs.writeFileSync(setPath, JSON.stringify(cur, null, 2) + "\n");
+' "$_tpl" "$_set"
+            ;;
+        python3|python)
+            "$JSON_RUNTIME" - "$_tpl" "$_set" <<'PYEOF'
+import json, os, sys
+tplPath, setPath = sys.argv[1], sys.argv[2]
+def strip(o):
+    if isinstance(o, list): return [strip(x) for x in o]
+    if isinstance(o, dict): return {k: strip(v) for k, v in o.items() if not k.startswith('_')}
+    return o
+with open(tplPath) as fh:
+    tpl = strip(json.load(fh))
+cur = {}
+if os.path.exists(setPath):
+    try:
+        with open(setPath) as fh:
+            cur = json.load(fh)
+    except Exception:
+        sys.stderr.write('settings.json existe pero no es JSON parseable\n'); sys.exit(3)
+if not isinstance(cur.get('hooks'), dict):
+    cur['hooks'] = {}
+def cmd_of(h):
+    return h['command'] if isinstance(h, dict) and 'command' in h else json.dumps(h, sort_keys=True)
+for event, groups in (tpl.get('hooks') or {}).items():
+    if not isinstance(cur['hooks'].get(event), list):
+        cur['hooks'][event] = []
+    for g in groups:
+        dst = next((x for x in cur['hooks'][event] if x.get('matcher', '') == g.get('matcher', '')), None)
+        if dst is None:
+            cur['hooks'][event].append(json.loads(json.dumps(g))); continue
+        if not isinstance(dst.get('hooks'), list):
+            dst['hooks'] = []
+        seen = set(cmd_of(h) for h in dst['hooks'])
+        for hk in g.get('hooks', []):
+            if cmd_of(hk) not in seen:
+                dst['hooks'].append(hk); seen.add(cmd_of(hk))
+os.makedirs(os.path.dirname(setPath), exist_ok=True)
+with open(setPath, 'w') as fh:
+    json.dump(cur, fh, indent=2); fh.write('\n')
+PYEOF
+            ;;
+    esac
+}
+
 phase_sinapsis_engine() {
     local current_status
     current_status=$(json_get_phase_status "sinapsis-engine")
@@ -484,6 +614,7 @@ phase_sinapsis_engine() {
         # Aún así re-validamos para detectar drift (alguien borró archivos manualmente)
         if validate_sinapsis_deep >/dev/null 2>&1; then
             record_sinapsis_validation
+            clear_phase_errors "sinapsis-engine"  # purga fantasmas de intentos viejos ya resueltos
             skip "sinapsis-engine · ya instalado y validado (status=done)"
             return 0
         else
@@ -526,6 +657,15 @@ phase_sinapsis_engine() {
         mark_phase_failed "sinapsis-engine" "vendor/sinapsis/install.sh devolvió error · revisa el output anterior"
     fi
     cd "$prev_dir"
+
+    # FIX capa OS: cablear los hooks de Sinapsis en settings.json (idempotente).
+    # El instalador vendored NO lo hace si settings.json ya existía.
+    info "Cableando hooks de Sinapsis en ~/.claude/settings.json..."
+    if ensure_sinapsis_hooks; then
+        ok "Hooks de Sinapsis cableados en settings.json"
+    else
+        warn "No se pudieron cablear los hooks automáticamente · revisa ~/.claude/settings.json"
+    fi
 
     # Validación POST-instalación (esto es lo que evita "instalaciones fantasma")
     info "Validando instalación de Sinapsis (validación profunda)..."

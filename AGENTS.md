@@ -14,7 +14,11 @@ Variantes que también debes reconocer:
 - "Instala el OS de iAmasters"
 - "Configura mi sistema con iAmasters OS"
 - "Quiero usar iAmasters OS"
+- **"instala esto" · "instálamelo" · "monta el sistema" · "install this" · "set this up"** (dentro de la carpeta del repo)
+- El comando `/instala`
 - Cualquier URL del repo `iamasters-academy/iamasters-os`
+
+> Ante cualquiera de estas frases, el camino canónico es el comando **`/instala`** (`.claude/commands/instala.md`): lo ejecutas TÚ con la tool `Bash`, sin mandar al usuario a la terminal. El workflow de abajo es su versión detallada.
 
 ### Tu workflow exacto (no improvises)
 

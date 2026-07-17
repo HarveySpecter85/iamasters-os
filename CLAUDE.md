@@ -14,9 +14,12 @@ Antes de responder al primer mensaje del usuario en este repo, **debes** comprob
 **Comprobación obligatoria** (en este orden):
 
 1. **¿Existe el state file?**
-   - Si NO existe → la instalación técnica nunca corrió. Indica al usuario:
-     > "iAmasters OS no está instalado. Necesito que ejecutes desde terminal: `bash scripts/install.sh`. Cuando termine, vuelve aquí."
-   - NO crees archivos manualmente para simular instalación. NO marques nada como instalado.
+   - Si NO existe → la instalación técnica nunca corrió. **Ofrécete a instalarlo tú** (es lo más cómodo: el usuario no suele usar terminal):
+     > "iAmasters OS aún no está instalado. Te lo instalo yo ahora mismo (Sinapsis + capa OS, ~30s). ¿Le doy?"
+     - Con su OK, ejecuta `bash scripts/install.sh` con la tool `Bash` (ya está permitido en `.claude/settings.json`, no pide permiso). En Windows corre igual vía Git Bash, que Claude Code ya requiere; si `bash` no está disponible, pídele instalar Git Bash.
+     - Parsea la salida estructurada (`[OK]`/`[SKIP]`/`[WARN]`/`[ERROR]`). Si hay `[ERROR]`, diagnostica y explícalo en castellano.
+     - Cuando termine bien, continúa con `/install` para las fases conversacionales.
+   - NO crees archivos manualmente para simular instalación. NO marques nada como instalado a mano — de eso se encarga `install.sh`.
 
 2. **Si existe, ¿todas las fases `required: true` están en `status: "done"`?**
    - Si NO → la instalación está incompleta. Invoca el comando `/install` (o el wizard directamente, según la fase pendiente).
@@ -237,9 +240,9 @@ Viven en `skills-library/` (cero coste de contexto hasta instalarlas). Instalar:
 
 ### Slash commands
 
-`/install` · `/install-status` · `/start-here` · `/wrap-up` · `/doctor` · `/actualiza` · `/restaura` · `/backup` · `/skills` · `/add-client` · `/install-skill` · `/install-mcp` · `/aprende` · `/deep-dive` · `/recuerda` · `/loops` · `/evalua-loop`
+`/instala` · `/install` · `/install-status` · `/start-here` · `/wrap-up` · `/doctor` · `/actualiza` · `/restaura` · `/backup` · `/skills` · `/add-client` · `/install-skill` · `/install-mcp` · `/aprende` · `/deep-dive` · `/recuerda` · `/loops` · `/evalua-loop`
 
-Los dos primeros (`/install`, `/install-status`) son nuevos en v0.6 y son la **única vía oficial** para gestionar la instalación desde dentro de Claude Code.
+`/instala` es el punto de entrada **sin terminal**: se dispara con "instala esto" / "install this" y ejecuta el installer por ti (Mac y Windows con Git Bash). `/install` e `/install-status` gestionan/consultan la instalación por fases una vez arrancada.
 
 ### Capa 2 — skills externas
 

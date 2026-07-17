@@ -53,16 +53,21 @@ Esta sección es la que evita "instalaciones fantasma". No te fíes de que el ar
 | `_operator-state.json` parseable | `node -e "JSON.parse(require('fs').readFileSync('~/.claude/skills/_operator-state.json'))"` no falla | 🔴 |
 | `_operator-state.json` tiene campos mínimos | `.operator.name` y `.operator.language` no son null/empty | 🟡 (sin esto el wizard no ha terminado) |
 | `_catalog.json` parseable | mismo | 🟡 |
-| Hooks ejecutables (5 hooks) | `_passive-activator.sh`, `_instinct-activator.sh`, `_session-learner.sh`, `_project-context.sh`, `_eod-gather.sh` existen Y tienen permiso `+x` | 🔴 si falla ≥2, 🟡 si falla 1 |
+| Hooks ejecutables (7 hooks) | `_passive-activator.sh`, `_instinct-activator.sh`, `_session-learner.sh`, `_project-context.sh`, `_eod-gather.sh`, `_dream.sh`, `_precompact-guard.sh` existen Y tienen permiso `+x` | 🔴 si falla ≥2, 🟡 si falla 1 |
 | ≥1 SKILL.md instalada | `find ~/.claude/skills -maxdepth 3 -name SKILL.md` devuelve ≥1 resultado | 🔴 |
-| Hooks registrados en settings.json | `~/.claude/settings.json` parseable Y contiene la sección `hooks.PreToolUse` con referencias a `_passive-activator.sh` | 🟡 |
+| Hooks REALMENTE cableados en settings.json | `~/.claude/settings.json` parseable Y `hooks` referencia `_passive-activator.sh`, `_instinct-activator.sh` (PreToolUse) y `_session-learner.sh` (Stop). **Este es el check funcional real**: si faltan, Sinapsis está instalado pero el motor de aprendizaje NO se dispara (muerte silenciosa). Ojo: que exista la palabra `"hooks"` NO basta. | 🔴 |
 | Install-gate registrado | `~/.claude/settings.json` contiene `hooks.SessionStart` con referencia a `_install-gate.sh` | 🟡 |
 | **DRIFT check** | Si `_install-state.json.phases.sinapsis-engine.status == "done"` Y alguno de los anteriores falla → **DRIFT** | 🔴 con flag "STATE DRIFT" |
 
 Para los checks de hooks ejecutables, usa Bash:
 ```bash
-for h in _passive-activator.sh _instinct-activator.sh _session-learner.sh _project-context.sh _eod-gather.sh; do
+for h in _passive-activator.sh _instinct-activator.sh _session-learner.sh _project-context.sh _eod-gather.sh _dream.sh _precompact-guard.sh; do
   [ -x "$HOME/.claude/skills/$h" ] && echo "OK $h" || echo "FAIL $h"
+done
+
+# Check funcional real: ¿están los hooks de Sinapsis cableados en settings.json?
+for h in _passive-activator.sh _instinct-activator.sh _session-learner.sh; do
+  grep -q "$h" "$HOME/.claude/settings.json" 2>/dev/null && echo "WIRED $h" || echo "NOT-WIRED $h"
 done
 ```
 
