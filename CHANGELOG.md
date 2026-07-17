@@ -30,6 +30,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - **Instalación sin terminal (primary path).** Claude Code ahora **ejecuta el installer por ti** con tu OK, en vez de mandarte a una terminal. Nuevo comando **`/instala`** (y disparadores en lenguaje natural: "instala esto", "install this", "set this up") que detecta el SO, corre `bash scripts/install.sh` (Mac/Linux y Windows vía Git Bash), verifica y sigue con el onboarding. Alineados `CLAUDE.md` (install gate), `/install`, `AGENTS.md` y `README.md`, que antes se contradecían (AGENTS decía "ejecútalo" y el gate lo prohibía).
+- **`/actualiza` ahora también REPARA los hooks.** `update.sh` re-cablea los hooks de Sinapsis al final (vía el nuevo `scripts/_ensure-sinapsis-hooks.sh`, compartido con `install.sh`). Así, los miembros que ya tenían el motor de aprendizaje inerte (por haber instalado con la versión previa) quedan arreglados con solo decir **"actualiza"** — sin reinstalar. Idempotente y preserva permisos/config/hooks del operador.
 
 ---
 

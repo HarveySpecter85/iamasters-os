@@ -528,83 +528,13 @@ ensure_sinapsis_hooks() {
     # toda la instalación). Aquí hacemos un DEEP-MERGE IDEMPOTENTE de los hooks de
     # la plantilla de Sinapsis dentro del settings.json del usuario, preservando
     # cualquier hook/permiso/config previo. Re-ejecutar = no-op.
+    # Delega en el script compartido (mismo merge que usa update.sh, DRY).
     local template="$SINAPSIS_VENDOR/core/settings.template.json"
-    local settings="$CLAUDE_HOME/settings.json"
     if [ ! -f "$template" ]; then
         warn "  no encontrado $template · no se pueden cablear los hooks de Sinapsis"
         return 1
     fi
-    mkdir -p "$CLAUDE_HOME"
-
-    local _tpl _set
-    _tpl="$(_win_path "$template")"
-    _set="$(_win_path "$settings")"
-
-    case "$JSON_RUNTIME" in
-        node)
-            node -e '
-const fs = require("fs"), path = require("path");
-const tplPath = process.argv[1], setPath = process.argv[2];
-function strip(o){ if(Array.isArray(o)) return o.map(strip); if(o && typeof o==="object"){ const r={}; for(const [k,v] of Object.entries(o)){ if(k.startsWith("_")) continue; r[k]=strip(v);} return r;} return o; }
-const tpl = strip(JSON.parse(fs.readFileSync(tplPath, "utf8")));
-let cur = {};
-if (fs.existsSync(setPath)) { try { cur = JSON.parse(fs.readFileSync(setPath, "utf8")); } catch(e){ console.error("settings.json existe pero no es JSON parseable"); process.exit(3); } }
-cur.hooks = (cur.hooks && typeof cur.hooks === "object") ? cur.hooks : {};
-const cmdOf = h => (h && typeof h === "object" && h.command) ? h.command : JSON.stringify(h);
-for (const [event, groups] of Object.entries(tpl.hooks || {})) {
-  if (!Array.isArray(cur.hooks[event])) cur.hooks[event] = [];
-  for (const g of groups) {
-    let dst = cur.hooks[event].find(x => (x.matcher || "") === (g.matcher || ""));
-    if (!dst) { cur.hooks[event].push(JSON.parse(JSON.stringify(g))); continue; }
-    if (!Array.isArray(dst.hooks)) dst.hooks = [];
-    const seen = new Set(dst.hooks.map(cmdOf));
-    for (const hk of (g.hooks || [])) { if (!seen.has(cmdOf(hk))) { dst.hooks.push(hk); seen.add(cmdOf(hk)); } }
-  }
-}
-fs.mkdirSync(path.dirname(setPath), { recursive: true });
-fs.writeFileSync(setPath, JSON.stringify(cur, null, 2) + "\n");
-' "$_tpl" "$_set"
-            ;;
-        python3|python)
-            "$JSON_RUNTIME" - "$_tpl" "$_set" <<'PYEOF'
-import json, os, sys
-tplPath, setPath = sys.argv[1], sys.argv[2]
-def strip(o):
-    if isinstance(o, list): return [strip(x) for x in o]
-    if isinstance(o, dict): return {k: strip(v) for k, v in o.items() if not k.startswith('_')}
-    return o
-with open(tplPath) as fh:
-    tpl = strip(json.load(fh))
-cur = {}
-if os.path.exists(setPath):
-    try:
-        with open(setPath) as fh:
-            cur = json.load(fh)
-    except Exception:
-        sys.stderr.write('settings.json existe pero no es JSON parseable\n'); sys.exit(3)
-if not isinstance(cur.get('hooks'), dict):
-    cur['hooks'] = {}
-def cmd_of(h):
-    return h['command'] if isinstance(h, dict) and 'command' in h else json.dumps(h, sort_keys=True)
-for event, groups in (tpl.get('hooks') or {}).items():
-    if not isinstance(cur['hooks'].get(event), list):
-        cur['hooks'][event] = []
-    for g in groups:
-        dst = next((x for x in cur['hooks'][event] if x.get('matcher', '') == g.get('matcher', '')), None)
-        if dst is None:
-            cur['hooks'][event].append(json.loads(json.dumps(g))); continue
-        if not isinstance(dst.get('hooks'), list):
-            dst['hooks'] = []
-        seen = set(cmd_of(h) for h in dst['hooks'])
-        for hk in g.get('hooks', []):
-            if cmd_of(hk) not in seen:
-                dst['hooks'].append(hk); seen.add(cmd_of(hk))
-os.makedirs(os.path.dirname(setPath), exist_ok=True)
-with open(setPath, 'w') as fh:
-    json.dump(cur, fh, indent=2); fh.write('\n')
-PYEOF
-            ;;
-    esac
+    bash "$SCRIPT_DIR/_ensure-sinapsis-hooks.sh" "$template" "$CLAUDE_HOME/settings.json"
 }
 
 phase_sinapsis_engine() {

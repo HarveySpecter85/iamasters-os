@@ -292,6 +292,19 @@ if [ -f "$REPO_ROOT/scripts/skills.sh" ]; then
     bash "$REPO_ROOT/scripts/skills.sh" sync || true
 fi
 
+# ── Re-cablear hooks de Sinapsis (idempotente) ──
+# Clave: /actualiza también REPARA instalaciones antiguas cuyos hooks nunca se
+# registraron (settings.json preexistente en la instalación original → el motor
+# de aprendizaje quedaba inerte). Preserva permisos/config/hooks del operador.
+if [ -d "$HOME/.claude/skills" ] && [ -f "$REPO_ROOT/scripts/_ensure-sinapsis-hooks.sh" ]; then
+    echo -e "${BLUE}[+]${NC} Verificando hooks de Sinapsis en ~/.claude/settings.json..."
+    if bash "$REPO_ROOT/scripts/_ensure-sinapsis-hooks.sh" >/dev/null 2>&1; then
+        echo -e "${GREEN}  OK${NC} Hooks de Sinapsis cableados/confirmados (activos al reiniciar Claude Code)"
+    else
+        echo -e "${YELLOW}  !${NC} No se pudieron verificar los hooks · si algo falla, di 'instala esto'"
+    fi
+fi
+
 # ── Done ──
 echo
 echo -e "${GREEN}${BOLD}============================================================${NC}"
