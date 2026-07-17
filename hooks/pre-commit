@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Pre-commit hook · iAmasters OS
+# Protección para quien DESARROLLA el repo (no para los miembros que instalan):
+#   1. Bloquea secretos hardcodeados antes de commitear (incondicional).
+#   2. Avisa de archivos grandes (>1 MB) y pide confirmación (si hay terminal).
+#
+# Activar en tu clon del repo (una sola vez):
+#   git config core.hooksPath hooks
+#
+# Idea original: contribución de la comunidad (PR #10). Adaptada y simplificada.
+set -uo pipefail
+
+echo "🔍 Verificando commit..."
+
+# Staged reales (excluye borrados/renames para no procesar rutas inexistentes)
+STAGED="$(git diff --cached --name-only --diff-filter=d --no-renames)"
+
+# ─── Secretos (bloqueante, incondicional) ───────────────────────────────────
+# Requiere asignación ([:=]) tras la palabra clave para no autofalsear con el
+# propio patrón ni con comentarios sueltos.
+LEAK=""
+if [ -n "$STAGED" ]; then
+  LEAK="$(printf '%s\n' "$STAGED" | xargs -r grep -IlE '(API_KEY|APIKEY|SECRET|PASSWORD|PRIVATE_KEY|ACCESS_TOKEN|AUTH_TOKEN)[[:space:]]*[:=]' 2>/dev/null || true)"
+fi
+if [ -n "$LEAK" ]; then
+  echo "❌ Posibles secretos hardcodeados en el commit:"
+  echo "$LEAK"
+  echo "Usa variables de entorno (.env.local), no claves en el código. Revisa y reintenta."
+  exit 1
+fi
+
+# ─── Archivos grandes (>1 MB) ───────────────────────────────────────────────
+LARGE=""
+if [ -n "$STAGED" ]; then
+  LARGE="$(printf '%s\n' "$STAGED" | xargs -r du -k 2>/dev/null | awk '$1 >= 1024 {print $2}' || true)"
+fi
+if [ -n "$LARGE" ]; then
+  echo "⚠️  Archivos grandes detectados (>1 MB):"
+  echo "$LARGE"
+  if [ -t 0 ]; then
+    printf '¿Commitearlos igualmente? (s/N) '
+    read -r response
+    [ "$response" = "s" ] || { echo "Cancelado."; exit 1; }
+  else
+    echo "(sin terminal: los dejo pasar, pero revísalos — ¿deberían ir en .gitignore?)"
+  fi
+fi
+
+echo "✅ Verificación completa."
+exit 0
