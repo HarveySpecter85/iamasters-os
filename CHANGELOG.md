@@ -21,6 +21,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.10.2] — 2026-07-17
+
+### Fixed
+- **Los hooks de Sinapsis no se cableaban si `~/.claude/settings.json` ya existía** (`scripts/install.sh`). El instalador vendored de Sinapsis, ante un `settings.json` preexistente (el caso de casi todos los usuarios de Claude Code), solo imprimía *"merge manually"* y NO registraba sus hooks. Consecuencias: (a) en máquinas cuyo `settings.json` no tenía sección `hooks`, la validación profunda abortaba la instalación con *"Sinapsis se ejecutó pero la validación profunda falla"*; (b) en las que sí tenían hooks de otra cosa, la validación pasaba en falso y **el motor de aprendizaje de Sinapsis quedaba inerte sin avisar**. Nuevo `ensure_sinapsis_hooks()`: deep-merge **idempotente** de los 7 hooks de la plantilla de Sinapsis dentro del `settings.json` del operador, preservando permisos/config/hooks previos. El upstream de Luis (v4.8.0) tampoco resuelve esto, por eso se arregla en la capa OS.
+- **Validación profunda endurecida** (`scripts/install.sh`, skill `health-check`): antes comprobaba solo 3 de los 7 hooks y un `grep '"hooks"'` que daba falso OK. Ahora valida los 7 hooks y el **cableado real** de los activadores en `settings.json`.
+- **Error fantasma en `/install-status`** (`scripts/install.sh`): `mark_phase_done` no limpiaba el array global `errors[]`, así que un fallo de un intento previo seguía apareciendo tras un reintento exitoso. Nuevo `clear_phase_errors()`; se purga al completar o revalidar una fase.
+
+### Changed
+- **Instalación sin terminal (primary path).** Claude Code ahora **ejecuta el installer por ti** con tu OK, en vez de mandarte a una terminal. Nuevo comando **`/instala`** (y disparadores en lenguaje natural: "instala esto", "install this", "set this up") que detecta el SO, corre `bash scripts/install.sh` (Mac/Linux y Windows vía Git Bash), verifica y sigue con el onboarding. Alineados `CLAUDE.md` (install gate), `/install`, `AGENTS.md` y `README.md`, que antes se contradecían (AGENTS decía "ejecútalo" y el gate lo prohibía).
+
+---
+
 ## [0.10.1] — 2026-06-12
 
 ### Changed

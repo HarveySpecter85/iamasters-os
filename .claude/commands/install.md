@@ -12,16 +12,13 @@ Coordinas la instalación por fases de iAmasters OS. La fuente de verdad es `~/.
 
 Lee `~/.claude/skills/_install-state.json` con la tool `Read`. Si NO existe:
 
-- Indica al usuario:
-  > "El installer técnico aún no ha corrido. Necesito que abras terminal y ejecutes:
-  >
-  > ```bash
-  > bash scripts/install.sh
-  > ```
-  >
-  > Cuando termine, vuelve aquí y di `/install` otra vez."
+- El installer técnico aún no ha corrido. **Lánzalo tú** (con el OK del usuario, no hace falta que abra terminal):
+  > "El installer técnico aún no ha corrido. Te lo lanzo yo ahora (~30s). ¿Le doy?"
+  - Con su OK, ejecuta con la tool `Bash`: `bash scripts/install.sh` (permitido en `.claude/settings.json`).
+  - En Windows corre igual vía Git Bash. Si `bash` no está disponible para Claude Code, pídele instalar Git Bash y, como alternativa, que lo ejecute él desde una terminal Git Bash.
+  - Parsea la salida (`[OK]`/`[WARN]`/`[ERROR]`). Si hay `[ERROR]`, para y explícalo en castellano.
 - **NO crees el state file tú**. Solo lo crea `scripts/install.sh`.
-- Para aquí.
+- Cuando `install.sh` termine bien, vuelve a leer el state y sigue en el Paso 2.
 
 ### Paso 2 · Evaluar progreso
 
@@ -39,21 +36,17 @@ Mensaje:
 Sugiere ejecutar `/start-here` para arrancar el flujo normal de trabajo.
 
 #### Caso B: fase `prereqs` o `sinapsis-engine` pendiente/failed
-Estas fases las debe ejecutar `bash scripts/install.sh` desde terminal — TÚ NO puedes ejecutarlas desde Claude Code.
+Estas fases las ejecuta `bash scripts/install.sh`. **Puedes lanzarlo tú** desde Claude Code (con el OK del usuario) — no hace falta que abra una terminal.
 
 Mensaje:
-> "Faltan fases técnicas que requieren ejecutar el installer desde terminal. Abre tu terminal en este repo y ejecuta:
->
-> ```bash
-> bash scripts/install.sh --resume
-> ```
->
-> Esto retoma desde la fase pendiente: `<nombre-fase>`."
+> "Faltan fases técnicas (`<nombre-fase>`). Te las lanzo yo ahora (`bash scripts/install.sh --resume`, ~30s). ¿Le doy?"
 
-Si la fase está `failed`, lee `errors[]` del state file y muestra al usuario el último error para que pueda resolverlo:
-> "El último intento falló con: `<mensaje>`. Una vez lo arregles, ejecuta el comando de arriba."
+Con su OK, ejecuta con la tool `Bash`: `bash scripts/install.sh --resume`. Parsea la salida; si hay `[ERROR]`, explícalo en castellano y no sigas al resto de fases.
 
-**Para aquí. NO intentes ejecutar bash desde dentro de Claude Code para esto.**
+Si la fase está `failed`, lee `errors[]` del state file y muestra el último error **de esa fase** para dar contexto antes de reintentar:
+> "El intento anterior falló con: `<mensaje>`. Lo reintento ahora."
+
+En Windows corre igual vía Git Bash. Solo si `bash` no está disponible para Claude Code, pídele que lo ejecute él desde una terminal Git Bash.
 
 #### Caso C: fase `context-files` o `operator-state` pendiente/in-progress
 Esto es onboarding conversacional. Tú lo ejecutas directamente.
