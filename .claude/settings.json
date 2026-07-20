@@ -1,5 +1,5 @@
 {
-  "_comment": "iAmasters OS — settings.json del proyecto. Permisos seguros + hooks locales del OS. Los hooks de Sinapsis viven en ~/.claude/settings.json (global), instalados por bash scripts/install.sh.",
+  "_comment": "iAmasters OS — settings.json del proyecto. Permisos seguros + hooks locales del OS. Los hooks de Sinapsis viven en ~/.claude/settings.json (global), instalados por bash scripts/install.sh. Los hooks de abajo son específicos del repo.",
   "permissions": {
     "allow": [
       "Read(**)",
@@ -40,7 +40,6 @@
     ]
   },
   "hooks": {
-    "_comment": "Hooks locales del OS — los hooks Sinapsis (observe, instinct-activator, etc.) están en ~/.claude/settings.json. Estos son específicos del repo.",
     "SessionStart": [
       {
         "hooks": [
