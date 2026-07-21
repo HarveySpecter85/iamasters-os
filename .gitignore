@@ -109,5 +109,8 @@ yarn.lock
 *.tmp
 *.lock
 
+# Synapsis operator data — daily summaries y estado local, no se sube
+synapsis/
+
 # Personalizaciones del operador sobre skills curadas — sobreviven updates
 **/SKILL.local.md
